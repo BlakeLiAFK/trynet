@@ -6,12 +6,13 @@
 
 | 任务 | 开始时间 | 描述 |
 | --- | --- | --- |
-| fix-app-signing-and-git | 2026-02-08 | 修复应用签名 + 添加版权 + 初始化Git |
+| (无) | | |
 
 ## 已完成
 
 | 任务 | 完成时间 |
 | --- | --- |
+| fix-app-signing-and-git | 2026-02-08 |
 | phase3-features | 2026-02-08 |
 | apply-app-icon | 2026-02-08 |
 | proxy-support | 2026-02-08 |
