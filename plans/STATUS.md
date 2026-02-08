@@ -12,6 +12,7 @@
 
 | 任务 | 完成时间 |
 | --- | --- |
+| retina-tray-icon | 2026-02-08 |
 | fix-app-signing-and-git | 2026-02-08 |
 | phase3-features | 2026-02-08 |
 | apply-app-icon | 2026-02-08 |

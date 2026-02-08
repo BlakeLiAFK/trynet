@@ -6,7 +6,7 @@ import (
 	"github.com/efeenesc/systray"
 )
 
-//go:embed icon.png
+//go:embed icon@2x.png
 var iconData []byte
 
 // Callbacks 托盘回调函数
