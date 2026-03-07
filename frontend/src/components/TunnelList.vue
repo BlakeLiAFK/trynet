@@ -442,7 +442,7 @@ onUnmounted(() => {
           <div class="type-switcher">
             <button
               :class="['btn-secondary', { active: formData.tunnelType === 'quick' }]"
-              @click="formData.tunnelType = 'quick'"
+              @click="formData.tunnelType = 'quick'; if (formData.protocol === 'tcp') formData.protocol = 'http'"
               type="button"
             >Quick Tunnel</button>
             <button
@@ -485,7 +485,7 @@ onUnmounted(() => {
           <select v-model="formData.protocol">
             <option value="http">HTTP</option>
             <option value="https">HTTPS</option>
-            <option value="tcp">TCP</option>
+            <option value="tcp" :disabled="formData.tunnelType === 'quick'">TCP {{ formData.tunnelType === 'quick' ? '(Named Tunnel only)' : '' }}</option>
           </select>
         </div>
         <div class="form-group auto-start-row">

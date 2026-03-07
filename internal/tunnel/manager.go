@@ -93,8 +93,14 @@ func (m *Manager) Start(id int64, host string, port int, protocol, tunnelType, t
 	if tunnelType == "named" && token != "" {
 		args = append(args, "run", "--token", token)
 	} else {
+		// Quick Tunnel 只支持 http/https，TCP 不被 trycloudflare.com 支持
+		if protocol == "tcp" || protocol == "" {
+			protocol = "http"
+		}
 		localURL := fmt.Sprintf("%s://%s:%d", protocol, host, port)
-		args = append(args, "--url", localURL)
+		// 用 /dev/null 作为 config，避免 ~/.cloudflared/config.yml 中的
+		// ingress 规则（如 http_status:404）干扰 Quick Tunnel 路由
+		args = append(args, "--config", "/dev/null", "--url", localURL)
 	}
 	cmd := exec.Command(m.binaryPath, args...)
 
