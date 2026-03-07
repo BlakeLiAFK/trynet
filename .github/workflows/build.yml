@@ -123,6 +123,21 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${{ github.ref_name }}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            LOG=$(git log --pretty=format:"- %s" ${{ github.ref_name }})
+          else
+            LOG=$(git log --pretty=format:"- %s" ${PREV_TAG}..${{ github.ref_name }})
+          fi
+          echo "NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$LOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -134,7 +149,7 @@ jobs:
         with:
           draft: false
           prerelease: false
-          generate_release_notes: true
+          body: ${{ steps.notes.outputs.NOTES }}
           files: |
             artifacts/**/*.tar.gz
             artifacts/**/*.zip
