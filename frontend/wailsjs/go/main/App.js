@@ -6,12 +6,36 @@ export function CheckCloudflaredUpdate() {
   return window['go']['main']['App']['CheckCloudflaredUpdate']();
 }
 
+export function CreateAccess(arg1, arg2, arg3, arg4, arg5, arg6) {
+  return window['go']['main']['App']['CreateAccess'](arg1, arg2, arg3, arg4, arg5, arg6);
+}
+
 export function CreateTunnel(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
   return window['go']['main']['App']['CreateTunnel'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
 }
 
+export function DeleteAccess(arg1) {
+  return window['go']['main']['App']['DeleteAccess'](arg1);
+}
+
 export function DeleteTunnel(arg1) {
   return window['go']['main']['App']['DeleteTunnel'](arg1);
+}
+
+export function GetAccessLogs(arg1) {
+  return window['go']['main']['App']['GetAccessLogs'](arg1);
+}
+
+export function GetAccessStatus(arg1) {
+  return window['go']['main']['App']['GetAccessStatus'](arg1);
+}
+
+export function GetAccesses() {
+  return window['go']['main']['App']['GetAccesses']();
+}
+
+export function GetAllAccessStatuses() {
+  return window['go']['main']['App']['GetAllAccessStatuses']();
 }
 
 export function GetAllStatuses() {
@@ -70,12 +94,24 @@ export function SetSetting(arg1, arg2) {
   return window['go']['main']['App']['SetSetting'](arg1, arg2);
 }
 
+export function StartAccess(arg1) {
+  return window['go']['main']['App']['StartAccess'](arg1);
+}
+
 export function StartTunnel(arg1) {
   return window['go']['main']['App']['StartTunnel'](arg1);
 }
 
+export function StopAccess(arg1) {
+  return window['go']['main']['App']['StopAccess'](arg1);
+}
+
 export function StopTunnel(arg1) {
   return window['go']['main']['App']['StopTunnel'](arg1);
+}
+
+export function UpdateAccess(arg1, arg2, arg3, arg4, arg5, arg6, arg7) {
+  return window['go']['main']['App']['UpdateAccess'](arg1, arg2, arg3, arg4, arg5, arg6, arg7);
 }
 
 export function UpdateCloudflared() {

@@ -12,6 +12,7 @@
 
 | 任务 | 完成时间 |
 | --- | --- |
+| tcp-access-tunnel | 2026-03-08 |
 | retina-tray-icon | 2026-02-08 |
 | fix-app-signing-and-git | 2026-02-08 |
 | phase3-features | 2026-02-08 |

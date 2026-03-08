@@ -42,6 +42,24 @@ func (a *App) startup(ctx context.Context) {
 	a.cfd = cfd.New(dataDir)
 	a.tunnels = tunnel.New(a.cfd.BinaryPath())
 
+	// 注册访问隧道断连回调
+	a.tunnels.OnAccessExit = func(id int64) {
+		if a.db.GetSetting("notify_disconnect") != "true" {
+			return
+		}
+		name := fmt.Sprintf("Access #%d", id)
+		list, err := a.db.ListAccesses()
+		if err == nil {
+			for _, acc := range list {
+				if acc.ID == id {
+					name = acc.Name
+					break
+				}
+			}
+		}
+		notify.Send("TryNet", name+" disconnected")
+	}
+
 	// 注册隧道断连回调
 	a.tunnels.OnTunnelExit = func(id int64) {
 		// 检查用户是否启用了断连通知
@@ -77,22 +95,31 @@ func (a *App) startup(ctx context.Context) {
 	go a.autoStartTunnels()
 }
 
-// autoStartTunnels 启动所有标记了自启动的隧道
+// autoStartTunnels 启动所有标记了自启动的隧道和访问隧道
 func (a *App) autoStartTunnels() {
 	if !a.cfd.IsInstalled() {
-		return
-	}
-	list, err := a.db.ListTunnels()
-	if err != nil {
 		return
 	}
 	proxyURL := ""
 	if a.db.GetSetting("proxy_enabled") == "true" {
 		proxyURL = a.db.GetSetting("proxy_url")
 	}
-	for _, t := range list {
-		if t.AutoStart {
-			a.tunnels.Start(t.ID, t.LocalHost, t.LocalPort, t.Protocol, t.TunnelType, t.Token, proxyURL, t.NoTLSVerify)
+	// 启动暴露服务隧道
+	list, err := a.db.ListTunnels()
+	if err == nil {
+		for _, t := range list {
+			if t.AutoStart {
+				a.tunnels.Start(t.ID, t.LocalHost, t.LocalPort, t.Protocol, t.TunnelType, t.Token, proxyURL, t.NoTLSVerify)
+			}
+		}
+	}
+	// 启动访问隧道
+	accesses, err := a.db.ListAccesses()
+	if err == nil {
+		for _, acc := range accesses {
+			if acc.AutoStart {
+				a.tunnels.StartAccess(acc.ID, acc.Hostname, acc.LocalPort, acc.ServiceTokenID, acc.ServiceTokenSecret, proxyURL)
+			}
 		}
 	}
 }
@@ -279,6 +306,78 @@ type ScanResult struct {
 	Port    int    `json:"port"`
 	Proto   string `json:"proto"`
 	Latency int64  `json:"latency"`
+}
+
+// AccessStatus 访问隧道状态
+type AccessStatus struct {
+	Running bool   `json:"running"`
+	Error   string `json:"error"`
+	LastLog string `json:"lastLog"`
+}
+
+// GetAccesses 获取所有访问隧道配置
+func (a *App) GetAccesses() ([]db.Access, error) {
+	return a.db.ListAccesses()
+}
+
+// CreateAccess 创建访问隧道配置
+func (a *App) CreateAccess(name, hostname string, localPort int, serviceTokenID, serviceTokenSecret string, autoStart bool) (*db.Access, error) {
+	return a.db.CreateAccess(name, hostname, localPort, serviceTokenID, serviceTokenSecret, autoStart)
+}
+
+// UpdateAccess 更新访问隧道配置
+func (a *App) UpdateAccess(id int64, name, hostname string, localPort int, serviceTokenID, serviceTokenSecret string, autoStart bool) error {
+	return a.db.UpdateAccess(id, name, hostname, localPort, serviceTokenID, serviceTokenSecret, autoStart)
+}
+
+// DeleteAccess 删除访问隧道配置
+func (a *App) DeleteAccess(id int64) error {
+	a.tunnels.StopAccess(id)
+	return a.db.DeleteAccess(id)
+}
+
+// StartAccess 启动访问隧道
+func (a *App) StartAccess(id int64) error {
+	list, err := a.db.ListAccesses()
+	if err != nil {
+		return err
+	}
+	proxyURL := ""
+	if a.db.GetSetting("proxy_enabled") == "true" {
+		proxyURL = a.db.GetSetting("proxy_url")
+	}
+	for _, acc := range list {
+		if acc.ID == id {
+			return a.tunnels.StartAccess(id, acc.Hostname, acc.LocalPort, acc.ServiceTokenID, acc.ServiceTokenSecret, proxyURL)
+		}
+	}
+	return fmt.Errorf("access not found: %d", id)
+}
+
+// StopAccess 停止访问隧道
+func (a *App) StopAccess(id int64) error {
+	return a.tunnels.StopAccess(id)
+}
+
+// GetAccessStatus 获取单个访问隧道状态
+func (a *App) GetAccessStatus(id int64) AccessStatus {
+	s := a.tunnels.GetAccessStatus(id)
+	return AccessStatus{Running: s.Running, Error: s.Error, LastLog: s.LastLog}
+}
+
+// GetAllAccessStatuses 获取所有访问隧道状态
+func (a *App) GetAllAccessStatuses() map[int64]AccessStatus {
+	raw := a.tunnels.GetAllAccessStatuses()
+	result := make(map[int64]AccessStatus)
+	for id, s := range raw {
+		result[id] = AccessStatus{Running: s.Running, Error: s.Error, LastLog: s.LastLog}
+	}
+	return result
+}
+
+// GetAccessLogs 获取访问隧道完整日志
+func (a *App) GetAccessLogs(id int64) []string {
+	return a.tunnels.GetAccessLogs(id)
 }
 
 // ScanLAN 扫描局域网内可用的 HTTP/HTTPS 服务

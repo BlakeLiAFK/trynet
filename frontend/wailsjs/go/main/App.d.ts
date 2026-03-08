@@ -6,9 +6,21 @@ import {tunnel} from '../models';
 
 export function CheckCloudflaredUpdate():Promise<Record<string, string>>;
 
+export function CreateAccess(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:boolean):Promise<db.Access>;
+
 export function CreateTunnel(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:string,arg7:string,arg8:boolean,arg9:boolean):Promise<db.Tunnel>;
 
+export function DeleteAccess(arg1:number):Promise<void>;
+
 export function DeleteTunnel(arg1:number):Promise<void>;
+
+export function GetAccessLogs(arg1:number):Promise<Array<string>>;
+
+export function GetAccessStatus(arg1:number):Promise<main.AccessStatus>;
+
+export function GetAccesses():Promise<Array<db.Access>>;
+
+export function GetAllAccessStatuses():Promise<Record<number, main.AccessStatus>>;
 
 export function GetAllStatuses():Promise<Record<number, main.TunnelStatus>>;
 
@@ -38,9 +50,15 @@ export function SetAutoStart(arg1:boolean):Promise<void>;
 
 export function SetSetting(arg1:string,arg2:string):Promise<void>;
 
+export function StartAccess(arg1:number):Promise<void>;
+
 export function StartTunnel(arg1:number):Promise<void>;
 
+export function StopAccess(arg1:number):Promise<void>;
+
 export function StopTunnel(arg1:number):Promise<void>;
+
+export function UpdateAccess(arg1:number,arg2:string,arg3:string,arg4:number,arg5:string,arg6:string,arg7:boolean):Promise<void>;
 
 export function UpdateCloudflared():Promise<void>;
 

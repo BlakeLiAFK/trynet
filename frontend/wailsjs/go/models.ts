@@ -1,5 +1,33 @@
 export namespace db {
 	
+	export class Access {
+	    id: number;
+	    name: string;
+	    hostname: string;
+	    localPort: number;
+	    serviceTokenId: string;
+	    serviceTokenSecret: string;
+	    autoStart: boolean;
+	    createdAt: string;
+	    updatedAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Access(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.hostname = source["hostname"];
+	        this.localPort = source["localPort"];
+	        this.serviceTokenId = source["serviceTokenId"];
+	        this.serviceTokenSecret = source["serviceTokenSecret"];
+	        this.autoStart = source["autoStart"];
+	        this.createdAt = source["createdAt"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	}
 	export class Tunnel {
 	    id: number;
 	    name: string;
@@ -39,6 +67,22 @@ export namespace db {
 
 export namespace main {
 	
+	export class AccessStatus {
+	    running: boolean;
+	    error: string;
+	    lastLog: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AccessStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.running = source["running"];
+	        this.error = source["error"];
+	        this.lastLog = source["lastLog"];
+	    }
+	}
 	export class ScanResult {
 	    ip: string;
 	    port: number;

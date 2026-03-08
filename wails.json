@@ -13,7 +13,7 @@
   "info": {
     "companyName": "TryNet",
     "productName": "TryNet",
-    "productVersion": "1.0.6",
+    "productVersion": "1.0.7",
     "copyright": "© 2026 BlakeLiAFK. All rights reserved. https://github.com/BlakeLiAFK/trynet",
     "comments": "A modern cloudflared tunnel management tool"
   }

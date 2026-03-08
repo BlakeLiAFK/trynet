@@ -37,6 +37,12 @@ type Manager struct {
 	lastErrors   map[int64]string   // 持久化错误信息
 	lastLogs     map[int64][]string // 持久化日志（进程退出后保留）
 	OnTunnelExit func(id int64)     // 隧道非手动退出时的回调
+
+	// 访问隧道（独立 map，避免 ID 与暴露隧道冲突）
+	accessRunning    map[int64]*runningTunnel
+	accessLastErrors map[int64]string
+	accessLastLogs   map[int64][]string
+	OnAccessExit     func(id int64) // 访问隧道非手动退出时的回调
 }
 
 // urlRegex 匹配 trycloudflare.com 域名
@@ -57,13 +63,19 @@ var logCleanRegex = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s+`)
 // metricsAddrRegex 匹配 metrics 服务地址
 var metricsAddrRegex = regexp.MustCompile(`Starting metrics server on ([^\s/]+)`)
 
+// accessListenRegex 匹配访问隧道监听成功标志
+var accessListenRegex = regexp.MustCompile(`Start Websocket listener`)
+
 // New 创建隧道管理器
 func New(binaryPath string) *Manager {
 	return &Manager{
-		binaryPath: binaryPath,
-		running:    make(map[int64]*runningTunnel),
-		lastErrors: make(map[int64]string),
-		lastLogs:   make(map[int64][]string),
+		binaryPath:       binaryPath,
+		running:          make(map[int64]*runningTunnel),
+		lastErrors:       make(map[int64]string),
+		lastLogs:         make(map[int64][]string),
+		accessRunning:    make(map[int64]*runningTunnel),
+		accessLastErrors: make(map[int64]string),
+		accessLastLogs:   make(map[int64][]string),
 	}
 }
 
@@ -322,4 +334,185 @@ func (m *Manager) StopAll() {
 			rt.cmd.Process.Kill()
 		}
 	}
+	for _, rt := range m.accessRunning {
+		rt.manualStop = true
+		if rt.cmd.Process != nil {
+			rt.cmd.Process.Kill()
+		}
+	}
+}
+
+// StartAccess 启动访问隧道
+// 执行: cloudflared access tcp --hostname {hostname} --url localhost:{port}
+// 可选: --id {serviceTokenID} --secret {serviceTokenSecret}
+// 代理: 设置 HTTPS_PROXY 等环境变量
+func (m *Manager) StartAccess(id int64, hostname string, localPort int, serviceTokenID, serviceTokenSecret, proxyURL string) error {
+	m.mu.Lock()
+	if _, ok := m.accessRunning[id]; ok {
+		m.mu.Unlock()
+		return fmt.Errorf("access %d is already running", id)
+	}
+	delete(m.accessLastErrors, id)
+	delete(m.accessLastLogs, id)
+	m.mu.Unlock()
+
+	localURL := fmt.Sprintf("localhost:%d", localPort)
+	args := []string{"access", "tcp", "--hostname", hostname, "--url", localURL}
+	if serviceTokenID != "" && serviceTokenSecret != "" {
+		args = append(args, "--id", serviceTokenID, "--secret", serviceTokenSecret)
+	}
+
+	cmd := exec.Command(m.binaryPath, args...)
+	if proxyURL != "" {
+		cmd.Env = append(os.Environ(),
+			"HTTPS_PROXY="+proxyURL,
+			"HTTP_PROXY="+proxyURL,
+			"ALL_PROXY="+proxyURL,
+		)
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start cloudflared access: %w", err)
+	}
+
+	rt := &runningTunnel{cmd: cmd}
+	m.mu.Lock()
+	m.accessRunning[id] = rt
+	m.mu.Unlock()
+
+	go func() {
+		var lastErrors []string
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			m.mu.Lock()
+			if t, ok := m.accessRunning[id]; ok {
+				t.logs = append(t.logs, line)
+				if len(t.logs) > maxLogLines {
+					t.logs = t.logs[len(t.logs)-maxLogLines:]
+				}
+				// 检测监听成功标志
+				if accessListenRegex.MatchString(line) && t.url == "" {
+					t.url = "connected"
+				}
+			}
+			m.mu.Unlock()
+
+			// 收集错误信息
+			if matches := errRegex.FindStringSubmatch(line); len(matches) > 1 {
+				lastErrors = append(lastErrors, strings.TrimSpace(matches[1]))
+			} else if fatalRegex.MatchString(line) {
+				lastErrors = append(lastErrors, strings.TrimSpace(line))
+			}
+			if len(lastErrors) > 10 {
+				lastErrors = lastErrors[len(lastErrors)-10:]
+			}
+		}
+		m.mu.Lock()
+		if len(lastErrors) > 0 {
+			m.accessLastErrors[id] = strings.Join(lastErrors, "\n")
+		}
+		if t, ok := m.accessRunning[id]; ok {
+			m.accessLastLogs[id] = t.logs
+		}
+		m.mu.Unlock()
+	}()
+
+	go func() {
+		cmd.Wait()
+		m.mu.Lock()
+		wasManualStop := false
+		if rt, ok := m.accessRunning[id]; ok {
+			wasManualStop = rt.manualStop
+		}
+		delete(m.accessRunning, id)
+		if _, hasErr := m.accessLastErrors[id]; !hasErr {
+			m.accessLastErrors[id] = "process exited unexpectedly"
+		}
+		m.mu.Unlock()
+
+		if !wasManualStop && m.OnAccessExit != nil {
+			m.OnAccessExit(id)
+		}
+	}()
+
+	return nil
+}
+
+// StopAccess 停止访问隧道
+func (m *Manager) StopAccess(id int64) error {
+	m.mu.Lock()
+	rt, ok := m.accessRunning[id]
+	delete(m.accessLastErrors, id)
+	delete(m.accessLastLogs, id)
+	if ok {
+		rt.manualStop = true
+	}
+	m.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	if rt.cmd.Process != nil {
+		rt.cmd.Process.Kill()
+	}
+	return nil
+}
+
+// GetAccessStatus 获取单个访问隧道状态
+func (m *Manager) GetAccessStatus(id int64) Status {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if rt, ok := m.accessRunning[id]; ok {
+		var lastLog string
+		if len(rt.logs) > 0 {
+			lastLog = cleanLog(rt.logs[len(rt.logs)-1])
+		}
+		return Status{Running: true, URL: rt.url, LastLog: lastLog}
+	}
+	if errMsg, ok := m.accessLastErrors[id]; ok {
+		return Status{Running: false, Error: errMsg}
+	}
+	return Status{Running: false}
+}
+
+// GetAllAccessStatuses 获取所有访问隧道状态
+func (m *Manager) GetAllAccessStatuses() map[int64]Status {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	result := make(map[int64]Status)
+	for id, rt := range m.accessRunning {
+		var lastLog string
+		if len(rt.logs) > 0 {
+			lastLog = cleanLog(rt.logs[len(rt.logs)-1])
+		}
+		result[id] = Status{Running: true, URL: rt.url, LastLog: lastLog}
+	}
+	for id, errMsg := range m.accessLastErrors {
+		if _, running := m.accessRunning[id]; !running {
+			result[id] = Status{Running: false, Error: errMsg}
+		}
+	}
+	return result
+}
+
+// GetAccessLogs 获取访问隧道的完整日志
+func (m *Manager) GetAccessLogs(id int64) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if rt, ok := m.accessRunning[id]; ok {
+		cp := make([]string, len(rt.logs))
+		copy(cp, rt.logs)
+		return cp
+	}
+	if logs, ok := m.accessLastLogs[id]; ok {
+		cp := make([]string, len(logs))
+		copy(cp, logs)
+		return cp
+	}
+	return nil
 }

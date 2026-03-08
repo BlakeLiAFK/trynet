@@ -82,7 +82,7 @@ func (d *DB) migrate() error {
 	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN custom_domain TEXT NOT NULL DEFAULT ''")
 	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 0")
 	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN no_tls_verify INTEGER NOT NULL DEFAULT 0")
-	return nil
+	return d.migrateAccesses()
 }
 
 // ListTunnels 获取所有隧道配置
@@ -155,4 +155,86 @@ func (d *DB) SetSetting(key, value string) error {
 // Close 关闭数据库连接
 func (d *DB) Close() {
 	d.conn.Close()
+}
+
+// Access 访问隧道配置
+type Access struct {
+	ID                 int64  `json:"id"`
+	Name               string `json:"name"`
+	Hostname           string `json:"hostname"`
+	LocalPort          int    `json:"localPort"`
+	ServiceTokenID     string `json:"serviceTokenId"`
+	ServiceTokenSecret string `json:"serviceTokenSecret"`
+	AutoStart          bool   `json:"autoStart"`
+	CreatedAt          string `json:"createdAt"`
+	UpdatedAt          string `json:"updatedAt"`
+}
+
+// migrateAccesses 创建访问隧道表
+func (d *DB) migrateAccesses() error {
+	_, err := d.conn.Exec(`
+		CREATE TABLE IF NOT EXISTS accesses (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			hostname TEXT NOT NULL,
+			local_port INTEGER NOT NULL,
+			service_token_id TEXT NOT NULL DEFAULT '',
+			service_token_secret TEXT NOT NULL DEFAULT '',
+			auto_start INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+	`)
+	return err
+}
+
+// ListAccesses 获取所有访问隧道配置
+func (d *DB) ListAccesses() ([]Access, error) {
+	rows, err := d.conn.Query("SELECT id, name, hostname, local_port, service_token_id, service_token_secret, auto_start, created_at, updated_at FROM accesses ORDER BY id DESC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []Access
+	for rows.Next() {
+		var a Access
+		if err := rows.Scan(&a.ID, &a.Name, &a.Hostname, &a.LocalPort, &a.ServiceTokenID, &a.ServiceTokenSecret, &a.AutoStart, &a.CreatedAt, &a.UpdatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, a)
+	}
+	if list == nil {
+		list = []Access{}
+	}
+	return list, nil
+}
+
+// CreateAccess 创建访问隧道配置
+func (d *DB) CreateAccess(name, hostname string, localPort int, serviceTokenID, serviceTokenSecret string, autoStart bool) (*Access, error) {
+	now := time.Now().Format("2006-01-02 15:04:05")
+	res, err := d.conn.Exec(
+		"INSERT INTO accesses (name, hostname, local_port, service_token_id, service_token_secret, auto_start, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		name, hostname, localPort, serviceTokenID, serviceTokenSecret, autoStart, now, now,
+	)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := res.LastInsertId()
+	return &Access{ID: id, Name: name, Hostname: hostname, LocalPort: localPort, ServiceTokenID: serviceTokenID, ServiceTokenSecret: serviceTokenSecret, AutoStart: autoStart, CreatedAt: now, UpdatedAt: now}, nil
+}
+
+// UpdateAccess 更新访问隧道配置
+func (d *DB) UpdateAccess(id int64, name, hostname string, localPort int, serviceTokenID, serviceTokenSecret string, autoStart bool) error {
+	now := time.Now().Format("2006-01-02 15:04:05")
+	_, err := d.conn.Exec(
+		"UPDATE accesses SET name=?, hostname=?, local_port=?, service_token_id=?, service_token_secret=?, auto_start=?, updated_at=? WHERE id=?",
+		name, hostname, localPort, serviceTokenID, serviceTokenSecret, autoStart, now, id,
+	)
+	return err
+}
+
+// DeleteAccess 删除访问隧道配置
+func (d *DB) DeleteAccess(id int64) error {
+	_, err := d.conn.Exec("DELETE FROM accesses WHERE id=?", id)
+	return err
 }
