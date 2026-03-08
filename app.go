@@ -91,7 +91,7 @@ func (a *App) autoStartTunnels() {
 	}
 	for _, t := range list {
 		if t.AutoStart {
-			a.tunnels.Start(t.ID, t.LocalHost, t.LocalPort, t.Protocol, t.TunnelType, t.Token, proxyURL)
+			a.tunnels.Start(t.ID, t.LocalHost, t.LocalPort, t.Protocol, t.TunnelType, t.Token, proxyURL, t.NoTLSVerify)
 		}
 	}
 }
@@ -138,13 +138,13 @@ func (a *App) GetTunnels() ([]db.Tunnel, error) {
 }
 
 // CreateTunnel 创建隧道配置
-func (a *App) CreateTunnel(name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart bool) (*db.Tunnel, error) {
-	return a.db.CreateTunnel(name, host, port, protocol, tunnelType, token, customDomain, autoStart)
+func (a *App) CreateTunnel(name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart, noTLSVerify bool) (*db.Tunnel, error) {
+	return a.db.CreateTunnel(name, host, port, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify)
 }
 
 // UpdateTunnel 更新隧道配置
-func (a *App) UpdateTunnel(id int64, name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart bool) error {
-	return a.db.UpdateTunnel(id, name, host, port, protocol, tunnelType, token, customDomain, autoStart)
+func (a *App) UpdateTunnel(id int64, name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart, noTLSVerify bool) error {
+	return a.db.UpdateTunnel(id, name, host, port, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify)
 }
 
 // DeleteTunnel 删除隧道配置
@@ -166,7 +166,7 @@ func (a *App) StartTunnel(id int64) error {
 	}
 	for _, t := range list {
 		if t.ID == id {
-			return a.tunnels.Start(id, t.LocalHost, t.LocalPort, t.Protocol, t.TunnelType, t.Token, proxyURL)
+			return a.tunnels.Start(id, t.LocalHost, t.LocalPort, t.Protocol, t.TunnelType, t.Token, proxyURL, t.NoTLSVerify)
 		}
 	}
 	return fmt.Errorf("tunnel not found: %d", id)

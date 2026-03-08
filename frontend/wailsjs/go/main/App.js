@@ -6,8 +6,8 @@ export function CheckCloudflaredUpdate() {
   return window['go']['main']['App']['CheckCloudflaredUpdate']();
 }
 
-export function CreateTunnel(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8) {
-  return window['go']['main']['App']['CreateTunnel'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);
+export function CreateTunnel(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
+  return window['go']['main']['App']['CreateTunnel'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
 }
 
 export function DeleteTunnel(arg1) {
@@ -78,6 +78,6 @@ export function UpdateCloudflared() {
   return window['go']['main']['App']['UpdateCloudflared']();
 }
 
-export function UpdateTunnel(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9) {
-  return window['go']['main']['App']['UpdateTunnel'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9);
+export function UpdateTunnel(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10) {
+  return window['go']['main']['App']['UpdateTunnel'](arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, arg10);
 }

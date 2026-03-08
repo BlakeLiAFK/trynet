@@ -74,7 +74,8 @@ func (m *Manager) SetBinaryPath(path string) {
 
 // Start 启动隧道
 // proxyURL 非空时自动强制 HTTP/2 协议并设置代理环境变量
-func (m *Manager) Start(id int64, host string, port int, protocol, tunnelType, token, proxyURL string) error {
+// noTLSVerify 为 true 时传递 --no-tls-verify，跳过后端证书验证
+func (m *Manager) Start(id int64, host string, port int, protocol, tunnelType, token, proxyURL string, noTLSVerify bool) error {
 	m.mu.Lock()
 	if _, ok := m.running[id]; ok {
 		m.mu.Unlock()
@@ -91,6 +92,9 @@ func (m *Manager) Start(id int64, host string, port int, protocol, tunnelType, t
 		args = append(args, "--protocol", "http2")
 	}
 	if tunnelType == "named" && token != "" {
+		if noTLSVerify {
+			args = append(args, "--no-tls-verify")
+		}
 		args = append(args, "run", "--token", token)
 	} else {
 		// Quick Tunnel 只支持 http/https，TCP 不被 trycloudflare.com 支持
@@ -100,7 +104,11 @@ func (m *Manager) Start(id int64, host string, port int, protocol, tunnelType, t
 		localURL := fmt.Sprintf("%s://%s:%d", protocol, host, port)
 		// 用 /dev/null 作为 config，避免 ~/.cloudflared/config.yml 中的
 		// ingress 规则（如 http_status:404）干扰 Quick Tunnel 路由
-		args = append(args, "--config", "/dev/null", "--url", localURL)
+		args = append(args, "--config", "/dev/null")
+		if noTLSVerify {
+			args = append(args, "--no-tls-verify")
+		}
+		args = append(args, "--url", localURL)
 	}
 	cmd := exec.Command(m.binaryPath, args...)
 

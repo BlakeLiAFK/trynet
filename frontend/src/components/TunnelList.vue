@@ -14,6 +14,7 @@ interface Tunnel {
   token: string
   customDomain: string
   autoStart: boolean
+  noTLSVerify: boolean
   createdAt: string
   updatedAt: string
 }
@@ -70,6 +71,7 @@ const formData = ref({
   token: '',
   customDomain: '',
   autoStart: false,
+  noTLSVerify: false,
 })
 
 // 过滤和排序后的隧道列表
@@ -141,7 +143,7 @@ async function pollMetrics() {
 
 function openCreate() {
   editingTunnel.value = null
-  formData.value = { name: '', localHost: '127.0.0.1', localPort: 8080, protocol: 'http', tunnelType: 'quick', token: '', customDomain: '', autoStart: false }
+  formData.value = { name: '', localHost: '127.0.0.1', localPort: 8080, protocol: 'http', tunnelType: 'quick', token: '', customDomain: '', autoStart: false, noTLSVerify: false }
   showForm.value = true
 }
 
@@ -156,17 +158,18 @@ function openEdit(t: Tunnel) {
     token: t.token || '',
     customDomain: t.customDomain || '',
     autoStart: t.autoStart || false,
+    noTLSVerify: t.noTLSVerify || false,
   }
   showForm.value = true
 }
 
 async function saveForm() {
   const App = await import('../../wailsjs/go/main/App')
-  const { name, localHost, localPort, protocol, tunnelType, token, customDomain, autoStart } = formData.value
+  const { name, localHost, localPort, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify } = formData.value
   if (editingTunnel.value) {
-    await App.UpdateTunnel(editingTunnel.value.id, name, localHost, localPort, protocol, tunnelType, token, customDomain, autoStart)
+    await App.UpdateTunnel(editingTunnel.value.id, name, localHost, localPort, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify)
   } else {
-    await App.CreateTunnel(name, localHost, localPort, protocol, tunnelType, token, customDomain, autoStart)
+    await App.CreateTunnel(name, localHost, localPort, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify)
   }
   showForm.value = false
   await loadData()
@@ -487,6 +490,15 @@ onUnmounted(() => {
             <option value="https">HTTPS</option>
             <option value="tcp" :disabled="formData.tunnelType === 'quick'">TCP {{ formData.tunnelType === 'quick' ? '(Named Tunnel only)' : '' }}</option>
           </select>
+        </div>
+        <div v-if="formData.protocol === 'https' || formData.tunnelType === 'named'" class="form-group auto-start-row">
+          <label class="switch-label">
+            <span>{{ t('tunnel.noTLSVerify') }}</span>
+            <label class="switch">
+              <input type="checkbox" v-model="formData.noTLSVerify" />
+              <span class="slider"></span>
+            </label>
+          </label>
         </div>
         <div class="form-group auto-start-row">
           <label class="switch-label">

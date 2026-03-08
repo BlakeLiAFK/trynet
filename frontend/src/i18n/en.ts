@@ -42,6 +42,7 @@ export default {
     namedStep2: 'Copy the Tunnel Token and paste it below',
     namedStep3: 'Configure Public Hostname in the dashboard pointing to the local address below',
     autoStart: 'Auto Start',
+    noTLSVerify: 'Skip TLS Verify',
     search: 'Search tunnels...',
     sortDefault: 'Default',
     sortName: 'By Name',

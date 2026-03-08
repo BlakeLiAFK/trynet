@@ -10,6 +10,7 @@ export namespace db {
 	    token: string;
 	    customDomain: string;
 	    autoStart: boolean;
+	    noTLSVerify: boolean;
 	    createdAt: string;
 	    updatedAt: string;
 	
@@ -28,6 +29,7 @@ export namespace db {
 	        this.token = source["token"];
 	        this.customDomain = source["customDomain"];
 	        this.autoStart = source["autoStart"];
+	        this.noTLSVerify = source["noTLSVerify"];
 	        this.createdAt = source["createdAt"];
 	        this.updatedAt = source["updatedAt"];
 	    }

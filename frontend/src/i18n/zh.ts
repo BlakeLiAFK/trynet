@@ -42,6 +42,7 @@ export default {
     namedStep2: '复制 Tunnel 的 Token 粘贴到下方',
     namedStep3: '在控制台配置 Public Hostname 指向下方的本地地址',
     autoStart: '随程序启动',
+    noTLSVerify: '跳过 TLS 验证',
     search: '搜索隧道...',
     sortDefault: '默认排序',
     sortName: '按名称',

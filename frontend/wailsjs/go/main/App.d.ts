@@ -6,7 +6,7 @@ import {tunnel} from '../models';
 
 export function CheckCloudflaredUpdate():Promise<Record<string, string>>;
 
-export function CreateTunnel(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:string,arg7:string,arg8:boolean):Promise<db.Tunnel>;
+export function CreateTunnel(arg1:string,arg2:string,arg3:number,arg4:string,arg5:string,arg6:string,arg7:string,arg8:boolean,arg9:boolean):Promise<db.Tunnel>;
 
 export function DeleteTunnel(arg1:number):Promise<void>;
 
@@ -42,4 +42,4 @@ export function StopTunnel(arg1:number):Promise<void>;
 
 export function UpdateCloudflared():Promise<void>;
 
-export function UpdateTunnel(arg1:number,arg2:string,arg3:string,arg4:number,arg5:string,arg6:string,arg7:string,arg8:string,arg9:boolean):Promise<void>;
+export function UpdateTunnel(arg1:number,arg2:string,arg3:string,arg4:number,arg5:string,arg6:string,arg7:string,arg8:string,arg9:boolean,arg10:boolean):Promise<void>;

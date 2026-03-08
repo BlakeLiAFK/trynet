@@ -20,6 +20,7 @@ type Tunnel struct {
 	Token        string `json:"token"`         // Cloudflare tunnel token
 	CustomDomain string `json:"customDomain"`  // 自定义域名
 	AutoStart    bool   `json:"autoStart"`     // 开机自启动
+	NoTLSVerify  bool   `json:"noTLSVerify"`   // 跳过后端 TLS 验证（用于自签名/IP 证书）
 	CreatedAt    string `json:"createdAt"`
 	UpdatedAt    string `json:"updatedAt"`
 }
@@ -80,12 +81,13 @@ func (d *DB) migrate() error {
 	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN token TEXT NOT NULL DEFAULT ''")
 	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN custom_domain TEXT NOT NULL DEFAULT ''")
 	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 0")
+	d.conn.Exec("ALTER TABLE tunnels ADD COLUMN no_tls_verify INTEGER NOT NULL DEFAULT 0")
 	return nil
 }
 
 // ListTunnels 获取所有隧道配置
 func (d *DB) ListTunnels() ([]Tunnel, error) {
-	rows, err := d.conn.Query("SELECT id, name, local_host, local_port, protocol, tunnel_type, token, custom_domain, auto_start, created_at, updated_at FROM tunnels ORDER BY id DESC")
+	rows, err := d.conn.Query("SELECT id, name, local_host, local_port, protocol, tunnel_type, token, custom_domain, auto_start, no_tls_verify, created_at, updated_at FROM tunnels ORDER BY id DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +95,7 @@ func (d *DB) ListTunnels() ([]Tunnel, error) {
 	var list []Tunnel
 	for rows.Next() {
 		var t Tunnel
-		if err := rows.Scan(&t.ID, &t.Name, &t.LocalHost, &t.LocalPort, &t.Protocol, &t.TunnelType, &t.Token, &t.CustomDomain, &t.AutoStart, &t.CreatedAt, &t.UpdatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Name, &t.LocalHost, &t.LocalPort, &t.Protocol, &t.TunnelType, &t.Token, &t.CustomDomain, &t.AutoStart, &t.NoTLSVerify, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			return nil, err
 		}
 		list = append(list, t)
@@ -105,25 +107,25 @@ func (d *DB) ListTunnels() ([]Tunnel, error) {
 }
 
 // CreateTunnel 创建隧道配置
-func (d *DB) CreateTunnel(name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart bool) (*Tunnel, error) {
+func (d *DB) CreateTunnel(name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart, noTLSVerify bool) (*Tunnel, error) {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	res, err := d.conn.Exec(
-		"INSERT INTO tunnels (name, local_host, local_port, protocol, tunnel_type, token, custom_domain, auto_start, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-		name, host, port, protocol, tunnelType, token, customDomain, autoStart, now, now,
+		"INSERT INTO tunnels (name, local_host, local_port, protocol, tunnel_type, token, custom_domain, auto_start, no_tls_verify, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		name, host, port, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify, now, now,
 	)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return &Tunnel{ID: id, Name: name, LocalHost: host, LocalPort: port, Protocol: protocol, TunnelType: tunnelType, Token: token, CustomDomain: customDomain, AutoStart: autoStart, CreatedAt: now, UpdatedAt: now}, nil
+	return &Tunnel{ID: id, Name: name, LocalHost: host, LocalPort: port, Protocol: protocol, TunnelType: tunnelType, Token: token, CustomDomain: customDomain, AutoStart: autoStart, NoTLSVerify: noTLSVerify, CreatedAt: now, UpdatedAt: now}, nil
 }
 
 // UpdateTunnel 更新隧道配置
-func (d *DB) UpdateTunnel(id int64, name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart bool) error {
+func (d *DB) UpdateTunnel(id int64, name, host string, port int, protocol, tunnelType, token, customDomain string, autoStart, noTLSVerify bool) error {
 	now := time.Now().Format("2006-01-02 15:04:05")
 	_, err := d.conn.Exec(
-		"UPDATE tunnels SET name=?, local_host=?, local_port=?, protocol=?, tunnel_type=?, token=?, custom_domain=?, auto_start=?, updated_at=? WHERE id=?",
-		name, host, port, protocol, tunnelType, token, customDomain, autoStart, now, id,
+		"UPDATE tunnels SET name=?, local_host=?, local_port=?, protocol=?, tunnel_type=?, token=?, custom_domain=?, auto_start=?, no_tls_verify=?, updated_at=? WHERE id=?",
+		name, host, port, protocol, tunnelType, token, customDomain, autoStart, noTLSVerify, now, id,
 	)
 	return err
 }
