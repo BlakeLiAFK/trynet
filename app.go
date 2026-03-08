@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"trynet/internal/autostart"
+	"trynet/internal/scan"
 	"trynet/internal/cfd"
 	"trynet/internal/db"
 	"trynet/internal/notify"
@@ -270,4 +271,32 @@ func (a *App) SetAutoStart(enabled bool) error {
 // IsAutoStartEnabled 检查是否已设置开机自启动
 func (a *App) IsAutoStartEnabled() bool {
 	return autostart.IsEnabled()
+}
+
+// ScanResult 局域网扫描结果
+type ScanResult struct {
+	IP      string `json:"ip"`
+	Port    int    `json:"port"`
+	Proto   string `json:"proto"`
+	Latency int64  `json:"latency"`
+}
+
+// ScanLAN 扫描局域网内可用的 HTTP/HTTPS 服务
+func (a *App) ScanLAN(subnetBits int) []ScanResult {
+	raw := scan.Scan(subnetBits, func(scanned, total int) {
+		wailsRuntime.EventsEmit(a.ctx, "scan-progress", scanned, total)
+	})
+	var results []ScanResult
+	for _, r := range raw {
+		results = append(results, ScanResult{
+			IP:      r.IP,
+			Port:    r.Port,
+			Proto:   r.Proto,
+			Latency: r.Latency,
+		})
+	}
+	if results == nil {
+		results = []ScanResult{}
+	}
+	return results
 }

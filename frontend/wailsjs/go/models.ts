@@ -39,6 +39,24 @@ export namespace db {
 
 export namespace main {
 	
+	export class ScanResult {
+	    ip: string;
+	    port: number;
+	    proto: string;
+	    latency: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ScanResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.ip = source["ip"];
+	        this.port = source["port"];
+	        this.proto = source["proto"];
+	        this.latency = source["latency"];
+	    }
+	}
 	export class TunnelStatus {
 	    running: boolean;
 	    url: string;

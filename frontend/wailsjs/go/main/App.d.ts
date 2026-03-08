@@ -32,6 +32,8 @@ export function IsCloudflaredInstalled():Promise<boolean>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function ScanLAN(arg1:number):Promise<Array<main.ScanResult>>;
+
 export function SetAutoStart(arg1:boolean):Promise<void>;
 
 export function SetSetting(arg1:string,arg2:string):Promise<void>;

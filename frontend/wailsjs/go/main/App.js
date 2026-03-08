@@ -58,6 +58,10 @@ export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function ScanLAN(arg1) {
+  return window['go']['main']['App']['ScanLAN'](arg1);
+}
+
 export function SetAutoStart(arg1) {
   return window['go']['main']['App']['SetAutoStart'](arg1);
 }

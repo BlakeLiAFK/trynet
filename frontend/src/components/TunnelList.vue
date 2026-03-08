@@ -19,6 +19,13 @@ interface Tunnel {
   updatedAt: string
 }
 
+interface ScanResult {
+  ip: string
+  port: number
+  proto: string
+  latency: number
+}
+
 interface TunnelStatus {
   running: boolean
   url: string
@@ -43,6 +50,14 @@ const showForm = ref(false)
 const editingTunnel = ref<Tunnel | null>(null)
 const cfdInstalled = ref(false)
 const loading = ref(true)
+
+// 局域网扫描
+const showScan = ref(false)
+const scanning = ref(false)
+const scanResults = ref<ScanResult[]>([])
+const scanProgress = ref(0)
+const scanTotal = ref(0)
+const subnetBits = ref(24)
 
 // 搜索和排序
 const searchQuery = ref('')
@@ -277,6 +292,32 @@ function copyAllLogs() {
   copyText(logLines.value.join('\n'))
 }
 
+async function openScan() {
+  const { EventsOn } = await import('../../wailsjs/runtime/runtime')
+  showScan.value = true
+  scanning.value = true
+  scanResults.value = []
+  scanProgress.value = 0
+  scanTotal.value = 0
+  EventsOn('scan-progress', (scanned: number, total: number) => {
+    scanProgress.value = scanned
+    scanTotal.value = total
+  })
+  try {
+    const App = await import('../../wailsjs/go/main/App')
+    scanResults.value = await App.ScanLAN(subnetBits.value)
+  } finally {
+    scanning.value = false
+  }
+}
+
+function selectScanResult(r: ScanResult) {
+  formData.value.localHost = r.ip
+  formData.value.localPort = r.port
+  formData.value.protocol = r.proto
+  showScan.value = false
+}
+
 onMounted(() => {
   loadData()
   pollTimer = window.setInterval(pollStatuses, 2000)
@@ -476,7 +517,10 @@ onUnmounted(() => {
         <div class="form-row">
           <div class="form-group">
             <label>{{ t('tunnel.localHost') }}</label>
-            <input v-model="formData.localHost" :placeholder="t('tunnel.hostPlaceholder')" />
+            <div class="input-with-btn">
+              <input v-model="formData.localHost" :placeholder="t('tunnel.hostPlaceholder')" />
+              <button type="button" class="btn-scan" @click="openScan">{{ t('tunnel.scan') }}</button>
+            </div>
           </div>
           <div class="form-group">
             <label>{{ t('tunnel.localPort') }}</label>
@@ -512,6 +556,58 @@ onUnmounted(() => {
         <div class="modal-actions">
           <button class="btn-secondary" @click="showForm = false">{{ t('common.cancel') }}</button>
           <button class="btn-primary" @click="saveForm">{{ t('common.save') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 局域网扫描弹窗 -->
+    <div v-if="showScan" class="modal-overlay" @click.self="showScan = false">
+      <div class="modal modal-scan">
+        <div class="log-header">
+          <h3>{{ t('tunnel.scan') }}</h3>
+          <button class="btn-secondary btn-sm" @click="showScan = false">{{ t('common.close') }}</button>
+        </div>
+        <div class="scan-options">
+          <label class="scan-option-label">{{ t('tunnel.scanSubnet') }}</label>
+          <div class="scan-option-btns">
+            <button
+              type="button"
+              :class="['btn-secondary', 'btn-sm', { active: subnetBits === 24 }]"
+              @click="subnetBits = 24"
+              :disabled="scanning"
+            >/24 <span class="scan-option-hint">254 {{ t('tunnel.scanHosts') }}</span></button>
+            <button
+              type="button"
+              :class="['btn-secondary', 'btn-sm', { active: subnetBits === 16 }]"
+              @click="subnetBits = 16"
+              :disabled="scanning"
+            >/16 <span class="scan-option-hint">65534 {{ t('tunnel.scanHosts') }}</span></button>
+          </div>
+          <button
+            type="button"
+            class="btn-primary btn-sm"
+            @click="openScan"
+            :disabled="scanning"
+          >{{ scanning ? t('tunnel.scanning') : t('tunnel.scanStart') }}</button>
+        </div>
+        <div v-if="scanning" class="scan-progress">
+          <div class="scan-bar-wrap">
+            <div class="scan-bar" :style="{ width: scanTotal > 0 ? (scanProgress / scanTotal * 100) + '%' : '0%' }"></div>
+          </div>
+          <span class="scan-tip">{{ t('tunnel.scanning') }} {{ scanProgress }} / {{ scanTotal }}</span>
+        </div>
+        <div v-else-if="scanResults.length === 0" class="scan-empty">{{ t('tunnel.scanEmpty') }}</div>
+        <div v-else class="scan-list">
+          <div
+            v-for="r in scanResults"
+            :key="r.ip + r.port"
+            class="scan-item"
+            @click="selectScanResult(r)"
+          >
+            <span :class="['badge', r.proto === 'https' ? 'badge-success' : 'badge-muted']">{{ r.proto.toUpperCase() }}</span>
+            <span class="scan-addr">{{ r.ip }}:{{ r.port }}</span>
+            <span class="scan-latency">{{ r.latency }}ms</span>
+          </div>
         </div>
       </div>
     </div>
@@ -1028,5 +1124,129 @@ textarea {
 }
 textarea:focus {
   border-color: var(--accent);
+}
+
+/* 扫描按钮 */
+.input-with-btn {
+  display: flex;
+  gap: 6px;
+}
+.input-with-btn input {
+  flex: 1;
+}
+.btn-scan {
+  flex-shrink: 0;
+  padding: 0 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+.btn-scan:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 扫描弹窗 */
+.modal-scan {
+  width: 480px;
+  max-width: 90vw;
+}
+.scan-progress {
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.scan-bar-wrap {
+  width: 100%;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.scan-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.2s;
+}
+.scan-tip {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.scan-empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 30px;
+  font-size: 14px;
+}
+.scan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.scan-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.scan-item:hover {
+  background: var(--bg-hover);
+}
+.scan-addr {
+  flex: 1;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+.scan-latency {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+/* 扫描选项 */
+.scan-options {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.scan-option-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.scan-option-btns {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+}
+.scan-option-btns .btn-secondary {
+  flex: 1;
+  font-size: 12px;
+}
+.scan-option-btns .active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.scan-option-hint {
+  font-size: 11px;
+  opacity: 0.7;
 }
 </style>
