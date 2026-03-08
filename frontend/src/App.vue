@@ -3,9 +3,10 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TunnelList from './components/TunnelList.vue'
 import SettingsView from './components/SettingsView.vue'
+import ScanView from './components/ScanView.vue'
 
 const { t, locale } = useI18n()
-const currentView = ref<'tunnels' | 'settings'>('tunnels')
+const currentView = ref<'tunnels' | 'scan' | 'settings'>('tunnels')
 
 onMounted(async () => {
   try {
@@ -28,6 +29,11 @@ onMounted(async () => {
             style="--wails-draggable:no-drag"
           >{{ t('nav.tunnels') }}</button>
           <button
+            :class="['nav-btn', { active: currentView === 'scan' }]"
+            @click="currentView = 'scan'"
+            style="--wails-draggable:no-drag"
+          >{{ t('nav.scan') }}</button>
+          <button
             :class="['nav-btn', { active: currentView === 'settings' }]"
             @click="currentView = 'settings'"
             style="--wails-draggable:no-drag"
@@ -37,6 +43,7 @@ onMounted(async () => {
     </header>
     <main class="main">
       <TunnelList v-if="currentView === 'tunnels'" />
+      <ScanView v-else-if="currentView === 'scan'" />
       <SettingsView v-else />
     </main>
   </div>

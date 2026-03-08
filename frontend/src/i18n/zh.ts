@@ -5,6 +5,7 @@ export default {
   },
   nav: {
     tunnels: '隧道',
+    scan: '扫描',
     settings: '设置',
   },
   tunnel: {
@@ -84,6 +85,13 @@ export default {
     updateTo: '更新到',
     updateDone: '更新完成',
     updateFailed: '更新失败',
+  },
+  scan: {
+    start: '开始扫描',
+    refresh: '重新扫描',
+    hint: '点击"开始扫描"发现局域网内的 HTTP/HTTPS 服务',
+    foundCount: '发现 {n} 个服务',
+    open: '打开',
   },
   settings: {
     title: '设置',

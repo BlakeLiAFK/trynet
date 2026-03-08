@@ -5,6 +5,7 @@ export default {
   },
   nav: {
     tunnels: 'Tunnels',
+    scan: 'Scan',
     settings: 'Settings',
   },
   tunnel: {
@@ -84,6 +85,13 @@ export default {
     updateTo: 'Update to',
     updateDone: 'Updated',
     updateFailed: 'Update failed',
+  },
+  scan: {
+    start: 'Start Scan',
+    refresh: 'Rescan',
+    hint: 'Click "Start Scan" to discover HTTP/HTTPS services on your LAN',
+    foundCount: '{n} services found',
+    open: 'Open',
   },
   settings: {
     title: 'Settings',
