@@ -2,6 +2,11 @@
 build/bin
 frontend/dist
 
+# 强制追踪构建资源文件（覆盖全局 gitignore 的 build 规则）
+!build/
+!build/**
+build/bin/
+
 # Dependencies
 node_modules
 frontend/node_modules
