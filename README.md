@@ -1,6 +1,10 @@
-# TryNet
+<p align="center">
+  <img src="build/appicon.png" width="128" height="128" alt="TryNet">
+</p>
 
-Cloudflare Tunnel 桌面管理工具，支持一键创建和管理多个隧道，将本地服务快速暴露到公网。
+<h1 align="center">TryNet</h1>
+
+<p align="center">Cloudflare Tunnel 桌面管理工具，支持一键创建和管理多个隧道，将本地服务快速暴露到公网。</p>
 
 ## 功能
 
