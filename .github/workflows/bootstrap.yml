@@ -1,0 +1,17 @@
+name: Restore verified TryNet source
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/bootstrap.yml']
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Verify and restore complete uploaded source
+        run: python3 .github/migration/bootstrap.py

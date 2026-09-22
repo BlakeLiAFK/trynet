@@ -1,0 +1,123 @@
+--- a/banner.go
++++ b/banner.go
+@@ -11,10 +11,11 @@
+ 	"strings"
+ 	"sync"
+ 
++	"trynet/internal/buildinfo"
+ 	"trynet/internal/tunnel"
+ )
+ 
+-const version = "1.0.0"
++var version = buildinfo.Version
+ 
+ // slant 字体的 trynet logo，注意里面全是 / \ _ .，没有反引号，可以用原始字符串
+ const logo = `   __                        __
+--- a/main.go
++++ b/main.go
+@@ -12,6 +12,7 @@
+ 	"path/filepath"
+ 
+ 	"time"
++	"trynet/internal/buildinfo"
+ 	"trynet/internal/cfapi"
+ 	"trynet/internal/fileshare"
+ 	"trynet/internal/tunnel"
+@@ -33,7 +34,12 @@
+ 	public := flag.Bool("public", envOrBool("TRYNET_PUBLIC", false), "serve the files with no login at all -- anyone with the url gets in (-dir mode only)")
+ 	user := flag.String("user", envOr("TRYNET_USER", "admin"), "login username for the file server (-dir mode only)")
+ 	pass := flag.String("pass", envOr("TRYNET_PASS", ""), "login password for the file server, random if empty (-dir mode only)")
++	showVersion := flag.Bool("version", false, "print version and source commit, then exit")
+ 	flag.Parse()
++	if *showVersion {
++		fmt.Printf("trynet v%s (%s)\n", buildinfo.Version, buildinfo.Commit)
++		return
++	}
+ 
+ 	if *port != 0 && *dir != "" {
+ 		log.Fatal("use either -port or -dir, not both")
+--- a/make.go
++++ b/make.go
+@@ -34,7 +34,12 @@
+ 	{"darwin", "arm64"},
+ }
+ 
++var releaseVersion = "1.0.0"
++var sourceCommit = "dev"
++
+ func main() {
++	flag.StringVar(&releaseVersion, "version", releaseVersion, "version embedded in binaries")
++	flag.StringVar(&sourceCommit, "commit", sourceCommit, "source commit embedded in binaries")
+ 	all := flag.Bool("all", false, "cross-compile every target into dist/ instead of just this machine")
+ 	flag.Parse()
+ 
+@@ -96,7 +101,7 @@
+ 
+ 	// -trimpath 去掉构建机的绝对路径，-s -w 去掉符号表和调试信息，
+ 	// 这两项加起来就能省掉三成体积，且不影响运行。
+-	cmd := exec.Command("go", "build", "-trimpath", "-ldflags=-s -w", "-o", raw, ".")
++	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags=-s -w -X trynet/internal/buildinfo.Version="+releaseVersion+" -X trynet/internal/buildinfo.Commit="+sourceCommit, "-o", raw, ".")
+ 	cmd.Env = append(os.Environ(), "GOOS="+t.goos, "GOARCH="+t.goarch, "CGO_ENABLED=0")
+ 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+ 	if err := cmd.Run(); err != nil {
+@@ -104,13 +109,11 @@
+ 	}
+ 	rawSize := fileSize(raw)
+ 
+-	// macOS 要主动跳过，原因和其它平台不一样：UPX 在这里是"压得成功、但产物跑不起来"。
+-	// 自 macOS 12 起 Apple 不再公开进程启动的拦截方式，压完的二进制会被系统当成
+-	// "Bad executable" 直接杀掉，连 Intel 版都不支持。这种只能提前拦，不能等它报错。
++	// Skip macOS: UPX disables modern macOS support because of compatibility issues.
+ 	if t.goos == "darwin" || upx == "" {
+ 		note := "upx unavailable"
+ 		if t.goos == "darwin" {
+-			note = "not packed: upx is broken on macOS"
++			note = "not packed: macOS compatibility policy"
+ 		}
+ 		return ship(raw, packed, rawSize, note)
+ 	}
+@@ -121,6 +124,14 @@
+ 	if out, err := exec.Command(upx, "--best", "-o", packed, raw).CombinedOutput(); err != nil {
+ 		_ = os.Remove(packed) // 失败时 UPX 可能留下半成品
+ 		return ship(raw, packed, rawSize, "not packed: "+upxReason(out))
++	}
++	if out, err := exec.Command(upx, "-t", packed).CombinedOutput(); err != nil {
++		_ = os.Remove(packed)
++		return ship(raw, packed, rawSize, "not packed: integrity check failed: "+upxReason(out))
++	}
++	if fileSize(packed) >= rawSize {
++		_ = os.Remove(packed)
++		return ship(raw, packed, rawSize, "not packed: no size saving")
+ 	}
+ 	fmt.Printf("%-34s %6.2f MB  (packed from %.2f MB)\n", packed, toMB(fileSize(packed)), toMB(rawSize))
+ 
+--- a/internal/tunnel/tunnel.go
++++ b/internal/tunnel/tunnel.go
+@@ -17,6 +17,7 @@
+ 	"strings"
+ 	"sync"
+ 	"time"
++	"trynet/internal/buildinfo"
+ 
+ 	"github.com/google/uuid"
+ 	"golang.org/x/net/http2"
+@@ -252,7 +253,7 @@
+ 		Client: pogs.ClientInfo{
+ 			ClientID: id[:],
+ 			Features: []string{"serialized_headers"},
+-			Version:  "trynet/1.0.0",
++			Version:  "trynet/" + buildinfo.Version,
+ 			Arch:     runtime.GOOS + "_" + runtime.GOARCH,
+ 		},
+ 		OriginLocalIP:   t.localIP,
+--- /dev/null
++++ b/internal/buildinfo/buildinfo.go
+@@ -0,0 +1,8 @@
++// Package buildinfo holds release metadata injected by the build workflow.
++package buildinfo
++
++// Version defaults to the first CLI release for ordinary go build invocations.
++var Version = "1.0.0"
++
++// Commit is "dev" for local builds without injected source metadata.
++var Commit = "dev"
