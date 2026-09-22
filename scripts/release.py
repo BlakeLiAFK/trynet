@@ -132,14 +132,16 @@ def main() -> None:
     (dist / "BUILDINFO.json").write_text(json.dumps(report, indent=2) + "\n")
     checksums = [sha256(path) + "  " + path.name for path in sorted(dist.iterdir()) if path.is_file()]
     (dist / "SHA256SUMS.txt").write_text("\n".join(checksums) + "\n")
-    lines = ["# TryNet v" + args.version, "", "A fresh CLI release replacing the previous Wails application. Older v1.0.x Wails releases are not versions of this CLI.", "",
+    lines = ["# TryNet v" + args.version, "", "Go CLI with HTTP and WebSocket forwarding. WebSocket support was added in CLI v1.1.0; the v1.0.0 CLI returned 501 for upgrades. Older v1.0.x Wails application releases belong to the previous project.", "",
+             "Run `trynet -port 3000`, then connect to `wss://<the-printed-host>.trycloudflare.com/ws` when the local service provides `/ws`. No extra WebSocket flag is needed.", "",
              "Source commit: `" + args.commit + "`", "", "| Target | Unpacked executable | Delivered executable | UPX |", "|---|---:|---:|---|"]
     for target in report["targets"]:
         lines.append("| {goos}/{goarch} | {unpacked_bytes:,} bytes | {binary_bytes:,} bytes | {status} |".format(**target, status="Yes" if target["packed"] else "No"))
     lines += ["", "Each package includes English/Chinese documentation and license files. `-unpacked` packages are compatibility alternatives, not debug builds.", "",
-              "All six targets pass native unit tests and executable smoke checks before publication. These checks do not validate live Cloudflare API access or custom-domain provisioning.", "",
+              "All six targets pass native unit tests and executable smoke checks before publication. The packaged Linux amd64 UPX and unpacked executables also pass real public WSS acceptance tests through temporary Cloudflare quick tunnels before publication.", "",
+              "WebSocket tests cover text/binary, 1 MiB messages, fragmentation, ping/pong, close codes, 16 concurrent clients, origin authentication rejection and socket cleanup. Extension negotiation can fall back to uncompressed frames; the test report records the actual outcome. No raw TCP/UDP/SSH support or automatic session recovery is implied.", "",
               "Windows executables are not Authenticode-signed; macOS builds are not Developer ID-signed or notarized. UPX is executable compression, not encryption or a security boundary. If security software rejects a packed binary, use the unpacked package; do not disable protection.", "",
-              "Verify downloads with SHA256SUMS.txt. Named/custom-domain mode remains experimental and unverified against a live Cloudflare account."]
+              "Verify downloads with SHA256SUMS.txt. Named/custom-domain provisioning remains experimental and unverified against a live Cloudflare account; public quick-tunnel WSS tests do not validate those account API operations."]
     (dist / "release-notes.md").write_text("\n".join(lines) + "\n")
 
 

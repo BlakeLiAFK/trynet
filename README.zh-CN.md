@@ -13,7 +13,7 @@ $ trynet
 / /_/ /  / /_/ / / / /  __/ /_
 \__/_/   \__, /_/ /_/\___/\__/
         /____/
-  mini cloudflare tunnel  v1.0.0
+  mini cloudflare tunnel  v1.1.0
 
   ✓ tunnel ready  [lax08]
   ┌───────────────────────────────────────────────────────────┐
@@ -43,17 +43,18 @@ trynet
 trynet -dir ~/Downloads
 ```
 
-把公网地址转发到本地 HTTP 服务：
+把公网地址转发到本地 HTTP/WebSocket 服务：
 
 ```sh
 trynet -port 3000
 ```
 
 每条命令都会输出一个 `https://<随机>.trycloudflare.com` 地址，进程退出前一直可用。
+访问 WebSocket 时，用同一主机名、`wss://` 协议和本地服务的端点路径；不需要额外开关。
 
 ## 安装
 
-从 [releases 页面](https://github.com/BlakeLiAFK/trynet/releases/tag/v1.0.0)下载二进制文件，或从源码构建：
+从 [releases 页面](https://github.com/BlakeLiAFK/trynet/releases/tag/v1.1.0)下载二进制文件，或从源码构建：
 
 ```sh
 git clone https://github.com/BlakeLiAFK/trynet.git
@@ -75,7 +76,7 @@ go run make.go -all
 加壳失败则回退到未加壳版本并说明原因。macOS 不加 UPX 壳。
 体积与平台、架构和编译器有关，实际发布数据写入 `BUILDINFO.json`，不承诺统一的 13 MB → 4 MB。
 
-### v1.0.0 下载与校验
+### v1.1.0 下载与校验
 
 Windows、macOS、Linux 均提供 **amd64（x86-64）** 和 **arm64** 两种构建。
 Windows 使用 `.zip`，macOS/Linux 使用 `.tar.gz`。成功加壳的平台额外提供
@@ -93,8 +94,8 @@ GitHub Actions 在发布前执行代码测试、六平台构建、UPX 完整性�
 推送 `v主版本.次版本.补丁版本` 标签，或在 **Release** 工作流中手工填写标签。
 工作流不会静默移动或覆盖已经发布的标签。
 
-新的 CLI 从 v1.0.0 重新开始；旧的 v1.0.7 等 Wails 应用版本属于此前项目，
-不是当前 CLI。请使用上面的 v1.0.0 下载链接。
+新的 CLI 从 v1.0.0 重新开始，**WebSocket 从 v1.1.0 起支持**；v1.0.0 二进制确实会
+把升级请求拒绝为 `501`。旧的 v1.0.7 等 Wails 应用版本属于此前项目，不是当前 CLI。
 
 ## 功能
 
@@ -111,10 +112,55 @@ GitHub Actions 在发布前执行代码测试、六平台构建、UPX 完整性�
 
 ### 端口转发（`-port`）
 
-到 `127.0.0.1:<端口>` 的反向代理。请求和响应头、流式响应体均透传。
+到 `127.0.0.1:<端口>` 的反向代理，请求和响应头、流式响应体均透传。
+**支持普通 HTTP 和 WebSocket。** 本地服务必须真正提供 WebSocket 端点，
+内置文件服务本身并不是 WebSocket 应用服务器。
 
-**只支持普通 HTTP。** WebSocket 升级、TCP 代理和 SSH 均不支持，这类请求会收到
-`501 Not Implemented`。
+假设本地服务的端点是 `ws://127.0.0.1:3000/ws`：
+
+```sh
+trynet -port 3000
+# 客户端连接 wss://<程序输出的随机主机名>.trycloudflare.com/ws
+```
+
+支持文本、二进制、分片、ping/pong 和关闭帧的双向透传。保留路径、查询参数、Host、
+Origin、Authorization、Cookie 和子协议协商；源站的 `401`、`403`、`404` 等拒绝
+仍然保持拒绝，不会绕过源站鉴权或 Origin 检查。文件分享的 `-user`、`-pass` 不会
+给转发的应用自动加上鉴权，应用需要自己配置认证。
+
+转发采用双向字节流，每条活跃连接使用两块可复用的 32 KiB 拷贝缓冲区，不把完整
+消息载入内存。**这只是拷贝缓冲区大小，不代表每条连接总内存只有 64 KiB**；HTTP/2、
+TLS、socket 和 Go 运行时也会消耗内存。实现没有新增 Go WebSocket 库依赖。
+
+扩展协商头按原样转发，但是否启用消息压缩由完整链路协商决定。客户端提出
+`permessage-deflate` 时，边缘或源站可能拒绝，此时应正常回退为未压缩消息。
+本地 HTTP/2 集成测试验证压缩帧和协商头的透传；公网验收报告会记录实际是否协商
+成功，不把“消息传通”误报为“压缩已启用”。不要在未协商成功时强行发送压缩帧。
+
+长连接请由应用配置心跳和客户端重连。隧道重连不会恢复已经断开的 WebSocket 会话，
+也不会自动重放丢失的消息。**原始 TCP 转发、UDP 和 SSH 仍不支持**，不能把这些能力
+与 WebSocket 混为一项。
+
+### WebSocket 验证
+
+`WebSocket acceptance` 工作流在竞态检测下重复运行 HTTP/2 集成测试 20 轮，
+复现旧实现的 `501`，再通过临时 Cloudflare 快速隧道测试真实公网 `wss://` 链路。
+覆盖 1 MiB 二进制消息、分片、双向 ping/pong、关闭码及原因、16 路并发、源站拒绝
+响应头、异常断开和资源回收。测试仅发布独立、带随机 token 鉴权的 echo 服务，
+不会把仓库或用户目录分享到公网。
+
+复现测试：
+
+```sh
+go test -race -count=20 -run '^TestWebSocket' -timeout=5m ./internal/tunnel
+python -m pip install websockets==15.0.1
+go build -o trynet .
+python scripts/websocket_smoke.py --binary ./trynet --output websocket-live.json
+```
+
+Python 库仅供测试使用，运行发行版不需要安装 Python。公网测试需要出站互联网访问。
+自定义域名的创建流程仍按下文标记为未验证；快速隧道的 WSS 验收不能证明账号 API
+操作或所有第三方应用都已验证。
 
 ---
 
@@ -124,6 +170,10 @@ Cloudflare 隧道把通常的客户端/服务端角色反了过来。trynet 主�
 边缘节点的 7844 端口发起 TLS 连接，然后**在这条出站连接上运行一个 HTTP/2
 服务端**。边缘沿着它收到的这条连接下发请求，trynet 从本地源站取数据应答。
 没有任何东西监听公网端口，因此不需要入站防火墙规则，也不需要端口映射。
+
+WebSocket 的公网 HTTP/1.1 `101` 升级，在隧道内部表示为一条 HTTP/2 流。
+trynet 向本地源站发起升级、校验握手，将响应头序列化给边缘，再桥接双向帧流；
+不是直接对 HTTP/2 ResponseWriter 调用 Hijack。
 
 注册过程走 Cap'n Proto RPC 控制流，与 `cloudflared` 使用的是同一套协议。
 快速隧道的凭据来自 `https://api.trycloudflare.com/tunnel`，该接口无需认证。
@@ -137,7 +187,7 @@ Cloudflare 隧道把通常的客户端/服务端角色反了过来。trynet 主�
 3. 环境变量里找到的 SOCKS5 代理
 
 走通的那条路会被记住，重连时优先使用。**只有在所有路径都失败时才输出代理诊断
-信息**——能正常工作时保持安静。全部失败时会打印当前平台下"设置代理再运行"的
+信息**——能正常工作时保持安静。全部失败时会打印当前平台下“设置代理再运行”的
 完整命令。
 
 HTTP `CONNECT` 代理经常无法到达 7844 端口，有些甚至返回
@@ -173,7 +223,10 @@ trynet 把快速隧道凭据保存在工作目录下的 `.trynet.json`（权限 
 | 文件服务鉴权 | 默认开启 | 不适用 | 不适用 | 不适用 |
 | 固定自有域名 | 支持，全自动（未验证） | 支持，需手工配置 | 支持 | 不支持 |
 | 代理自动探测 | 支持 | 仅读环境变量 | 仅读环境变量 | 不支持 |
-| WebSocket / TCP / SSH | 不支持 | 支持 | 支持 | 支持 |
+| WebSocket | 支持，CLI v1.1.0 起 | 支持 | 支持 | 支持 |
+
+trynet 尚未实现原始 TCP、UDP 和 SSH 转发。这些协议不再与 WebSocket 合并为一行；
+其他工具的相关能力和使用条件请查阅各自的协议文档。
 
 *其它项目那几列描述的是它们公开文档里的行为，免费额度也会随时间变化；
 在依赖表格里某一格之前，请以它们自己的文档为准。*
@@ -312,7 +365,7 @@ API token 需要以下权限：
 | `-bypass` | `TRYNET_BYPASS` | `false` | 关闭全部内容过滤 |
 | `-new` | `TRYNET_NEW` | `false` | 忽略存档，申请新隧道 |
 | `-domain` | `TRYNET_DOMAIN` | — | 要发布到的固定域名 |
-| `-api-token` | `CLOUDFLARE_API_TOKEN` | — | Cloudflare API token，`-domain` 必需 |
+| `-api-token` | `CLOUDFLARE_API_TOKEN` | — | API token，`-domain` 必需 |
 | `-account-id` | `CLOUDFLARE_ACCOUNT_ID` | — | 账户 id，仅当 token 跨多账户时需要 |
 | `-teardown` | `TRYNET_TEARDOWN` | `false` | 退出时删除 `-domain` 创建的资源 |
 
@@ -351,9 +404,10 @@ HTTP `CONNECT` 代理经常拒绝转发 7844 端口，或者默默地转发失�
 
 **支持 WebSocket、TCP、UDP 或 SSH 吗？**
 
-不支持。trynet 只处理普通 HTTP 请求。边缘会用自己的请求头标记 WebSocket 升级和
-TCP 代理，trynet 对这类请求返回 `501 Not Implemented`。需要这些能力请用
-`cloudflared`。
+**WebSocket 支持，CLI v1.1.0 起可用；原始 TCP、UDP、SSH 不支持。** 用 `-port`
+转发本地 HTTP/WebSocket 服务，客户端通过程序输出主机名的 `wss://` 地址访问原路径。
+v1.0.0 文档里的 `501` 是对旧二进制的真实描述，不是只改文档就能支持，请同时升级
+可执行文件。具体验证范围和限制见上面的 WebSocket 验证。
 
 ---
 

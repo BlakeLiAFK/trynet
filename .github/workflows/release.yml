@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, for example v1.0.1'
+        description: 'Release tag, for example v1.1.0'
         required: true
         type: string
 permissions:
@@ -73,7 +73,8 @@ jobs:
           go mod download
           go mod verify
           go vet ./...
-          go test -race -count=1 ./...
+          go test -race -count=1 -timeout=3m ./...
+          go run make.go -h
       - name: Install checksum-pinned UPX 5.2.1
         shell: bash
         run: |
@@ -133,11 +134,58 @@ jobs:
           name: release-packages
           path: dist
       - name: Native unit tests
-        run: go test -count=1 ./...
+        run: go test -count=1 -timeout=3m ./...
       - name: Verify packaged executables on the native OS and architecture
         run: python scripts/smoke.py --target ${{ matrix.target }}
+  websocket:
+    name: Public WSS on packaged Linux executables
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: dist
+      - run: python -m pip install websockets==15.0.1
+      - name: Verify real WSS before publishing packed and unpacked builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess, tarfile
+          info = json.loads(pathlib.Path('dist/BUILDINFO.json').read_text())
+          target = next(t for t in info['targets'] if (t['goos'], t['goarch']) == ('linux', 'amd64'))
+          for kind, archive, expected in [
+              ('packed', target['archive'], target['binary_sha256']),
+              ('unpacked', target['unpacked_archive'], target['unpacked_sha256']),
+          ]:
+              dest = pathlib.Path(os.environ['RUNNER_TEMP']) / ('ws-' + kind)
+              dest.mkdir(exist_ok=True)
+              with tarfile.open(pathlib.Path('dist') / archive) as package:
+                  binary = package.extractfile('trynet').read()
+              assert hashlib.sha256(binary).hexdigest() == expected
+              executable = dest / 'trynet'
+              executable.write_bytes(binary)
+              executable.chmod(0o755)
+              subprocess.run(['python', 'scripts/websocket_smoke.py', '--binary', str(executable),
+                              '--output', 'websocket-release-' + kind + '.json'], check=True)
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-websocket-evidence
+          path: websocket-release-*.json
+          retention-days: 14
   publish:
-    needs: [prepare, build, verify]
+    needs: [prepare, build, verify, websocket]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -151,7 +199,7 @@ jobs:
         with:
           name: release-packages
           path: dist
-      - name: Publish only after every native verification passed
+      - name: Publish only after native and public WebSocket verification passed
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ needs.prepare.outputs.tag }}

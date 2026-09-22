@@ -13,7 +13,7 @@ $ trynet
 / /_/ /  / /_/ / / / /  __/ /_
 \__/_/   \__, /_/ /_/\___/\__/
         /____/
-  mini cloudflare tunnel  v1.0.0
+  mini cloudflare tunnel  v1.1.0
 
   ✓ tunnel ready  [lax08]
   ┌───────────────────────────────────────────────────────────┐
@@ -44,18 +44,19 @@ Share a specific directory:
 trynet -dir ~/Downloads
 ```
 
-Forward a public URL to a local HTTP server:
+Forward a public URL to a local HTTP/WebSocket server:
 
 ```sh
 trynet -port 3000
 ```
 
 Each command prints a `https://<random>.trycloudflare.com` URL. That URL is
-live until the process exits.
+live until the process exits. For a WebSocket endpoint, use the same host with
+`wss://` and the origin's endpoint path; no extra WebSocket flag is needed.
 
 ## Install
 
-Download a binary from the [releases page](https://github.com/BlakeLiAFK/trynet/releases/tag/v1.0.0), or build from
+Download a binary from the [releases page](https://github.com/BlakeLiAFK/trynet/releases/tag/v1.1.0), or build from
 source:
 
 ```sh
@@ -79,7 +80,7 @@ with `upx -t` and falls back to the unpacked binary if packing fails. macOS is
 not UPX-packed. Sizes depend on the target and compiler; release measurements
 are recorded in `BUILDINFO.json`, rather than promising a fixed 13 MB to 4 MB ratio.
 
-### v1.0.0 downloads and verification
+### v1.1.0 downloads and verification
 
 Windows, macOS and Linux each have **amd64 (x86-64)** and **arm64** builds.
 Windows packages use `.zip`; macOS/Linux packages use `.tar.gz`. The release
@@ -99,8 +100,9 @@ before publishing. To release another version, push a `vMAJOR.MINOR.PATCH` tag
 or run the **Release** workflow manually with the tag name. Published tags are
 never silently moved or overwritten.
 
-The new CLI starts at v1.0.0; older Wails application releases such as v1.0.7
-belong to the previous project, not this CLI. Use the v1.0.0 link above.
+The new CLI started at v1.0.0. **WebSocket support starts with v1.1.0**; the
+v1.0.0 binary really rejected upgrades with `501`. Older Wails application
+releases such as v1.0.7 belong to the previous project, not this CLI.
 
 ## What you get
 
@@ -118,11 +120,65 @@ An embedded file service, served from the binary itself:
 
 ### Port forwarding (`-port`)
 
-A plain reverse proxy to `127.0.0.1:<port>`. Request and response headers and
-streaming bodies pass through.
+A reverse proxy to `127.0.0.1:<port>`. Request and response headers and
+streaming bodies pass through. **HTTP and WebSocket are supported.** The
+local service must provide the WebSocket endpoint; the built-in file server
+is not a WebSocket application server.
 
-**Plain HTTP only.** WebSocket upgrades, TCP proxying and SSH are not
-supported — those requests get `501 Not Implemented`.
+For an origin listening at `ws://127.0.0.1:3000/ws`:
+
+```sh
+trynet -port 3000
+# Use wss://<the-printed-host>.trycloudflare.com/ws in your client.
+```
+
+Text, binary, fragmented messages, ping/pong and close frames pass through.
+Paths, query strings, Host, Origin, Authorization, cookies and subprotocol
+negotiation are retained. Origin rejections such as `401`, `403` and `404`
+remain rejections; trynet does not bypass application authentication or Origin
+checks. File-sharing options `-user` and `-pass` do not secure a forwarded
+application: configure authentication on that application itself.
+
+The bridge streams bytes with two pooled 32 KiB copy buffers per active
+connection, not a whole-message cache. This is the copy-buffer allocation,
+not a promise that total connection memory is 64 KiB; HTTP/2, TLS, sockets
+and Go also use memory. No new Go WebSocket dependency is required.
+
+WebSocket extension offers are passed through, but compression depends on
+negotiation across the entire path. A client offering `permessage-deflate`
+must also work when the edge or origin declines it. Local HTTP/2 integration
+tests verify compressed frames and extension headers; the live acceptance
+report records whether compression was actually negotiated rather than
+assuming it. Do not force compressed frames without successful negotiation.
+
+Use application heartbeats and client reconnection. Re-establishing the tunnel
+does not restore an already broken WebSocket session or replay lost messages.
+Raw TCP forwarding, UDP and SSH are **not supported**; they are separate
+capabilities and must not be conflated with WebSocket support.
+
+### WebSocket verification
+
+The `WebSocket acceptance` workflow runs the HTTP/2 integration tests 20 times
+with Go's race detector, reproduces the old implementation's `501`, and tests
+a real public `wss://` connection through a temporary Cloudflare quick tunnel.
+It covers 1 MiB binary messages, fragmentation, both ping directions, close
+codes/reasons, 16 concurrent clients, origin rejection headers, abrupt
+ disconnects and resource cleanup. It only exposes an isolated,
+token-protected echo fixture, never the repository or a user directory.
+
+To repeat the tests:
+
+```sh
+go test -race -count=20 -run '^TestWebSocket' -timeout=5m ./internal/tunnel
+python -m pip install websockets==15.0.1
+go build -o trynet .
+python scripts/websocket_smoke.py --binary ./trynet --output websocket-live.json
+```
+
+The Python package is a **test-only** dependency; users of the binary do not
+need Python. The public test needs outbound Internet access. Named/custom-domain
+provisioning remains unverified as described below; quick-tunnel WSS tests
+do not validate account API operations or every third-party application.
 
 ---
 
@@ -133,6 +189,11 @@ a Cloudflare edge node on port 7844 over TLS, then runs an **HTTP/2 server on
 that outbound connection**. The edge sends requests down the connection it
 received; trynet answers them from the local origin. Nothing listens on a
 public port, so no inbound firewall rule and no port forwarding is needed.
+
+For WebSockets, the public HTTP/1.1 `101` upgrade is represented by an HTTP/2
+stream inside the tunnel. trynet performs the local origin upgrade, validates
+the handshake, serializes the response headers for the edge and bridges both
+frame directions. It does not try to hijack an HTTP/2 response writer.
 
 Registration happens over a Cap'n Proto RPC control stream, the same protocol
 `cloudflared` speaks. Credentials for a quick tunnel come from
@@ -188,7 +249,11 @@ Add `.trynet.json` to `.gitignore`.
 | Auth on the file server | Yes, by default | n/a | n/a | n/a |
 | Fixed custom domain | Yes, automated (unverified) | Yes, manual setup | Yes | No |
 | Proxy auto-detection | Yes | Environment variables only | Environment variables only | No |
-| WebSocket / TCP / SSH | No | Yes | Yes | Yes |
+| WebSocket | Yes, since CLI v1.1.0 | Yes | Yes | Yes |
+
+Raw TCP, UDP and SSH forwarding are not implemented in trynet. They are not
+included in the WebSocket row; check the other tools' protocol-specific
+requirements rather than treating these protocols as one feature.
 
 *Other projects' columns describe their documented behaviour and their free
 tiers change over time; check their own documentation before relying on a
@@ -339,7 +404,7 @@ Service options can be set by flag or environment variable. **The flag wins.**
 | `-bypass` | `TRYNET_BYPASS` | `false` | Disable all content filtering |
 | `-new` | `TRYNET_NEW` | `false` | Ignore saved credentials, request a new tunnel |
 | `-domain` | `TRYNET_DOMAIN` | — | Fixed domain to publish on |
-| `-api-token` | `CLOUDFLARE_API_TOKEN` | — | Cloudflare API token, required with `-domain` |
+| `-api-token` | `CLOUDFLARE_API_TOKEN` | — | API token, required with `-domain` |
 | `-account-id` | `CLOUDFLARE_ACCOUNT_ID` | — | Account id, only if the token spans several |
 | `-teardown` | `TRYNET_TEARDOWN` | `false` | Delete the resources `-domain` created, on exit |
 
@@ -360,7 +425,7 @@ unattended.
 **Why does my HTTP proxy not work?**
 
 HTTP `CONNECT` proxies often refuse or silently fail to forward port 7844. Some
-return `200 Connection established` and then forward nothing. Use a SOCKS5
+return `200 Connection established` and then forward nothing. Use SOCKS5
 proxy; trynet will find one in the environment and suggest it when every route
 fails.
 
@@ -384,9 +449,11 @@ savings vary by OS, architecture and compiler; see the release's `BUILDINFO.json
 
 **Does it support WebSocket, TCP, UDP or SSH?**
 
-No. trynet handles plain HTTP requests only. The edge marks WebSocket
-upgrades and TCP proxying with its own header, and trynet answers those with
-`501 Not Implemented`. Use `cloudflared` if you need them.
+**WebSocket: yes, since CLI v1.1.0. Raw TCP/UDP/SSH: no.** Forward the local
+HTTP/WebSocket service with `-port` and connect to its path using `wss://` on
+the printed hostname. The v1.0.0 README's `501` warning described that older
+binary correctly; changing documentation alone would not add support. Upgrade
+the executable too. For the test scope and limitations, see WebSocket verification.
 
 ---
 
