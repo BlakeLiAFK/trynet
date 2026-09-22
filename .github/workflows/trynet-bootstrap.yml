@@ -1,0 +1,47 @@
+name: TryNet Repository Bootstrap
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.trynet-bootstrap/READY'
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Reconstruct uploaded source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .trynet-bootstrap/part-* > /tmp/trynet-source.b64
+          base64 -d /tmp/trynet-source.b64 > /tmp/trynet-source.tar.xz
+          echo 'ab8d7199969a07aa0b5f0bd951108d986769dcf1690b244a10bb2bc269a9ffd8  /tmp/trynet-source.tar.xz' | sha256sum -c -
+          mkdir -p /tmp/trynet-source
+          tar -xJf /tmp/trynet-source.tar.xz -C /tmp/trynet-source
+
+      - name: Replace repository contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/workflows/trynet-bootstrap.yml /tmp/trynet-bootstrap.yml
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -a /tmp/trynet-source/. .
+          mkdir -p .github/workflows
+          cp /tmp/trynet-bootstrap.yml .github/workflows/trynet-bootstrap.yml
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore: replace repository with uploaded TryNet source'
+          git push origin HEAD:main
