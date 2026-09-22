@@ -1,0 +1,118 @@
+/* share.css —— 单文件分享链接的样式：文件行上的分享按钮，和点完之后
+   底部弹出的链接提示条。跟 modal.css 一样单独拆出来，app.css 只管
+   列表和上传那套主干。 */
+
+/* 分享按钮跟下载箭头一套尺寸和静止透明度：两个都是行尾的次要动作，
+   其中一个更显眼会让人以为那才是主操作。静止态 .35 而不是纯 hover 显示，
+   触屏上没有 hover，藏起来等于在手机上砍掉这个功能。 */
+.entry-share {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: .35;
+  transition: opacity 150ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.entry:hover .entry-share,
+.entry-share:hover,
+.entry-share:focus-visible {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.entry-share:disabled {
+  opacity: .2;
+  cursor: default;
+}
+
+.entry-share svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* 分享链接提示条。固定在视口底部居中，窄屏时左右留出 16px 的边，
+   顺着 safe-area 避开 iPhone 底部那条 home indicator。 */
+.share-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.share-toast-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.share-toast-title {
+  flex: 1 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.share-toast-close {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.share-toast-close:hover,
+.share-toast-close:focus-visible {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.share-toast-close svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 链接本身用等宽：它是要被人一眼核对、然后整条复制走的东西，
+   跟文件大小、百分比属于同一类"机器值"。 */
+.share-toast-url {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.share-toast-url:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}

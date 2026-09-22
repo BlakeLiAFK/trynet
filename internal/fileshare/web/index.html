@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>trynet</title>
+<link rel="icon" href="/ui/icon.png">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="modal.css">
+<link rel="stylesheet" href="share.css">
+<link rel="stylesheet" href="grid.css">
+</head>
+<body>
+<!-- 图标符号表，隐藏渲染，页面里和 app.js 生成的行都靠 <use> 引用这里的路径，
+     不引入任何图标库 -->
+<svg aria-hidden="true" style="display:none">
+  <symbol id="icon-upload" viewBox="0 0 24 24">
+    <path d="M12 4v11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+    <path d="M7.5 8.5 12 4l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M4.5 15.5v2A2.5 2.5 0 0 0 7 20h10a2.5 2.5 0 0 0 2.5-2.5v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-folder" viewBox="0 0 24 24">
+    <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.379a1.5 1.5 0 0 1 1.06.44L11.5 8H19.5A1.5 1.5 0 0 1 21 9.5v8A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-10Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-file" viewBox="0 0 24 24">
+    <path d="M7 3.5h7l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5A1.5 1.5 0 0 1 7 3.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+    <path d="M14 3.5V7a1 1 0 0 0 1 1h3.5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-download" viewBox="0 0 24 24">
+    <path d="M12 4v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+    <path d="M8 10.5 12 14.5 16 10.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M5 17.5h14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-check" viewBox="0 0 24 24">
+    <path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-link" viewBox="0 0 24 24">
+    <path d="M10.5 13.5a3.5 3.5 0 0 0 5 0l3-3a3.54 3.54 0 0 0-5-5l-1.5 1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+    <path d="M13.5 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.54 3.54 0 0 0 5 5l1.5-1.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-list" viewBox="0 0 24 24">
+    <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/>
+  </symbol>
+  <symbol id="icon-grid" viewBox="0 0 24 24">
+    <rect x="4" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+    <rect x="13" y="4" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+    <rect x="4" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+    <rect x="13" y="13" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="1.6" fill="none"/>
+  </symbol>
+  <symbol id="icon-close" viewBox="0 0 24 24">
+    <path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  </symbol>
+</svg>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <a class="brand" href="#" id="brand-link">trynet</a>
+    <nav class="breadcrumb" id="breadcrumb" aria-label="Current path"></nav>
+  </div>
+  <div class="topbar-right">
+    <!-- 列表 / 网格切换。用 role="radiogroup" 而不是两个独立按钮：这是二选一
+         的状态，不是两个动作，读屏器该读出"选中了哪个"。目录为空时整个隐藏，
+         没有东西可排布的时候给人一个切换开关只是噪音。 -->
+    <div class="view-toggle" id="view-toggle" role="radiogroup" aria-label="Layout" hidden>
+      <button type="button" class="view-btn" id="view-list" role="radio" aria-checked="true" aria-label="List view">
+        <svg aria-hidden="true" focusable="false"><use href="#icon-list" xlink:href="#icon-list"></use></svg>
+      </button>
+      <button type="button" class="view-btn" id="view-grid" role="radio" aria-checked="false" aria-label="Grid view">
+        <svg aria-hidden="true" focusable="false"><use href="#icon-grid" xlink:href="#icon-grid"></use></svg>
+      </button>
+    </div>
+    <button type="button" class="btn-upload" id="upload-btn" hidden>
+      <svg class="btn-upload-icon" aria-hidden="true" focusable="false"><use href="#icon-upload" xlink:href="#icon-upload"></use></svg>
+      Upload
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- 只在目录为空时出现：这时它是页面唯一内容，空状态本身就是邀请。
+       目录非空时靠页头的 Upload 按钮当入口，这个大盒子整个隐藏。
+       依旧兼职点击选择文件：label 包一个页面级的隐藏 file input -->
+  <label class="dropzone" id="dropzone" for="file-input" tabindex="0" role="button"
+         aria-label="Drop files here or tap to choose files to upload">
+    <svg class="dropzone-icon" aria-hidden="true" focusable="false"><use href="#icon-upload" xlink:href="#icon-upload"></use></svg>
+    <span class="dropzone-title">No files yet. Drop one in.</span>
+    <span class="dropzone-subtitle">Any file type, up to 100 MB</span>
+  </label>
+
+  <!-- 上传中的文件，每一行自己就是进度指示（底边细线从左往右填充） -->
+  <div class="uploads" id="uploads" hidden></div>
+
+  <!-- 当前目录列表的承载面，由 app.js 用 /data/ 的 JSON 响应填充 -->
+  <div class="list-panel" id="list-panel" hidden>
+    <ul class="entries" id="entries"></ul>
+  </div>
+  <!-- 目录非空时的上传入口。页头那个按钮太容易被当成装饰，拖放这件事需要
+       一个看得见的落点——一条窄的虚线条，不抢列表的位置，但始终在。
+       和大拖放框共用同一个隐藏 file input。 -->
+  <label class="drop-strip" id="drop-strip" for="file-input" tabindex="0" role="button" hidden
+         aria-label="Drop files here or tap to choose files to upload">
+    <svg aria-hidden="true" focusable="false"><use href="#icon-upload" xlink:href="#icon-upload"></use></svg>
+    <span>Drop files here or tap to choose</span>
+  </label>
+
+  <p class="empty" id="empty-message" hidden>No files yet. Drop one in.</p>
+</main>
+
+<!-- 拖到窗口任意位置时浮出的整页覆盖层，松手或拖离即消失 -->
+<div class="drag-overlay" id="drag-overlay" aria-hidden="true">
+  <div class="drag-overlay-box">
+    <svg class="drag-overlay-icon" aria-hidden="true" focusable="false"><use href="#icon-upload" xlink:href="#icon-upload"></use></svg>
+    <span>Release to upload</span>
+  </div>
+</div>
+
+<input type="file" id="file-input" multiple hidden>
+
+<!-- 登录弹窗：取代浏览器原生 Basic Auth 弹窗，会话 cookie 走这里换取。
+     初始隐藏，/data/ 收到 401 时由 auth.js 弹出；登录成功前，页面下面的
+     文件列表始终是空的——真实数据全部受 /data/ 一侧的鉴权保护，这个弹窗
+     本身不含任何敏感信息。 -->
+<div class="auth-overlay" id="auth-overlay" hidden aria-hidden="true">
+  <form class="auth-card" id="auth-form" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <h2 class="auth-title" id="auth-title">Sign in to trynet</h2>
+    <p class="auth-error" id="auth-error" hidden></p>
+    <label class="auth-field">
+      <span class="auth-label">Username</span>
+      <input type="text" id="auth-username" name="username" value="admin" autocomplete="username" required>
+    </label>
+    <label class="auth-field">
+      <span class="auth-label">Password</span>
+      <input type="password" id="auth-password" name="password" autocomplete="current-password" autofocus required>
+    </label>
+    <button type="submit" class="auth-submit" id="auth-submit">Sign in</button>
+  </form>
+</div>
+
+<!-- 分享链接的提示条。只读 input 而不是纯文本：无论剪贴板 API 成不成，
+     用户都看得见完整链接、都能自己 Ctrl+C，不用为"复制失败"单开一条分支。 -->
+<div class="share-toast" id="share-toast" hidden aria-live="polite">
+  <div class="share-toast-head">
+    <span class="share-toast-title" id="share-toast-title">Share link</span>
+    <button type="button" class="share-toast-close" id="share-toast-close" aria-label="Dismiss">
+      <svg aria-hidden="true" focusable="false"><use href="#icon-close" xlink:href="#icon-close"></use></svg>
+    </button>
+  </div>
+  <input type="text" class="share-toast-url" id="share-toast-url" readonly>
+</div>
+
+<noscript>This page needs JavaScript enabled to browse and upload files.</noscript>
+<script src="auth.js"></script>
+<script src="share.js"></script>
+<script src="grid.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

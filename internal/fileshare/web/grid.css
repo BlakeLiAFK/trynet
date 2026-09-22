@@ -1,0 +1,175 @@
+/* grid.css —— 列表/网格切换按钮、网格卡片，以及非空目录时那条常驻的拖放条。
+   app.css 只管列表和上传主干，这里是排布相关的部分。 */
+
+/* ---------- 切换按钮 ---------- */
+
+/* 页头右侧的容器。.topbar 是 space-between，右侧塞进第二个元素之后必须自己
+   成一个水平行，否则两个控件会各占一行把页头撑破。flex: 0 0 auto 防止
+   面包屑很长时把它压扁。 */
+.topbar-right {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 两个按钮共用一个凹槽底，选中的那个浮起来。比两个独立按钮更能说明
+   "这是二选一"，不用再靠颜色深浅去暗示。 */
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg);
+}
+
+.view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.view-btn:hover {
+  color: var(--text);
+}
+
+.view-btn.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.view-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- 网格 ---------- */
+
+/* auto-fill + minmax：列数跟着宽度自己算，不写断点。手机上是 2 列，
+   桌面上铺到七八列，中间所有宽度都平滑过渡。 */
+.entries.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.card {
+  list-style: none;
+}
+
+.card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-decoration: none;
+  color: inherit;
+}
+
+/* 固定 1:1 的方格，图片用 cover 填满。缩略图长宽比各不相同，
+   不裁的话每张卡片高度都不一样，网格立刻散掉。 */
+.card-media {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+
+.card-link:hover .card-media,
+.card-link:focus-visible .card-media {
+  border-color: var(--accent);
+}
+
+.card-icon {
+  width: 30px;
+  height: 30px;
+  color: var(--muted);
+}
+
+/* 缩略图到达之前是透明的，load 事件里才加 .loaded 淡入——
+   直接显示的话，图片逐行解码的过程会被看见 */
+.card-thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.card-thumb.loaded {
+  opacity: 1;
+}
+
+/* 文件名最多两行，超出截断。定高让所有卡片底边对齐，
+   名字一长一短时网格不会参差不齐。 */
+.card-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.6em;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text);
+  word-break: break-word;
+}
+
+/* 网格里的 ".." 返回行：卡片布局下一条列表行会很突兀，
+   让它横跨整行、缩成一条矮的返回带 */
+.entry.parent-in-grid {
+  grid-column: 1 / -1;
+  border: 0;
+  padding: 0 0 4px;
+}
+
+/* ---------- 非空目录的常驻拖放条 ---------- */
+
+.drop-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px;
+  min-height: 44px;
+  box-sizing: border-box;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+}
+
+.drop-strip:hover,
+.drop-strip:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.drop-strip svg {
+  width: 15px;
+  height: 15px;
+}

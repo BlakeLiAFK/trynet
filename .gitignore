@@ -1,0 +1,16 @@
+trynet
+trynet.exe
+run.log
+graphify/
+graphify-out/
+trynet-raw.exe
+*.exe~
+dist/
+.trynet.json
+.playwright-mcp/
+
+trynet-raw
+.release-work/
+__pycache__/
+*.pyc
+coverage.out

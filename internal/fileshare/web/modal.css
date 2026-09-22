@@ -1,0 +1,95 @@
+/* modal.css —— 登录弹窗：半透明遮罩 + 实色卡片，取代浏览器原生的 Basic Auth
+   弹窗。遮罩做毛玻璃，卡片本身不做——两层的视觉层次要分得清，卡片才是真正
+   要看清楚的内容。 */
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, .45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  animation: auth-fade-in 150ms ease forwards;
+}
+
+@keyframes auth-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.auth-card {
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 20px 48px -16px rgba(0, 0, 0, .5);
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.auth-field input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.auth-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
+.auth-submit {
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--bg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.auth-submit:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-overlay {
+    animation: none;
+    opacity: 1;
+  }
+}
