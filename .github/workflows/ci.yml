@@ -3,7 +3,7 @@ on:
   pull_request:
   push:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', 'internal/fileshare/web/**', 'scripts/**']
+    paths: ['**.go', 'go.mod', 'go.sum', 'internal/fileshare/web/**', 'scripts/**', 'VERSION', '.github/workflows/ci.yml']
 permissions:
   contents: read
 concurrency:
