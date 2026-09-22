@@ -146,7 +146,10 @@ func wsTestOpen(t *testing.T, client *http.Client, url string) (*http.Response, 
  if err != nil { t.Fatal(err) }
  t.Cleanup(func() { _ = resp.Body.Close() })
  if resp.StatusCode != http.StatusOK { t.Fatalf("upgrade status = %d, want 200", resp.StatusCode) }
- return resp, writer, cancel
+ // After RoundTrip returned, cancelling a context with an idle custom pipe
+ // alone doesn't emit RST_STREAM. Closing the response models a real edge
+ // stream cancellation, rather than leaving the test client silently open.
+ return resp, writer, func() { cancel(); _ = resp.Body.Close() }
 }
 
 func wsTestWait(t *testing.T, done <-chan struct{}, description string) {

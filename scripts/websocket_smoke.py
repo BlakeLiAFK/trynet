@@ -16,6 +16,7 @@ import secrets
 import sys
 import tempfile
 import time
+import traceback
 from urllib.request import urlopen
 import websockets
 from websockets.asyncio.client import connect
@@ -55,7 +56,8 @@ async def run_suite(args, report):
         active.add(ws)
         try:
             await ws.send(json.dumps({"path": ws.request.path, "host": ws.request.headers["Host"],
-                "origin": ws.request.headers.get("Origin"), "authenticated": True}))
+                "origin": ws.request.headers.get("Origin"), "authenticated": True,
+                "extension_offer_at_origin": ws.request.headers.get("Sec-WebSocket-Extensions", "")}))
             async for message in ws:
                 if message == "__server_ping__":
                     await asyncio.wait_for(await ws.ping(b"server-ping"), 10)
@@ -76,12 +78,14 @@ async def run_suite(args, report):
             active.discard(ws)
 
     process, reader_task = None, None
+    output = []
     with tempfile.TemporaryDirectory(prefix="trynet-ws-test-") as directory:
         async with serve(echo, "127.0.0.1", 0, process_request=process_request, subprotocols=["chat.v1"],
                          max_size=8*1024*1024, ping_interval=None, close_timeout=3) as server:
             port = server.sockets[0].getsockname()[1]
             if args.local_only:
                 host, scheme = f"127.0.0.1:{port}", "ws"
+                report["transport"] = "fixture self-test only; no TryNet or Cloudflare"
             else:
                 binary = Path(args.binary).resolve()
                 if not binary.is_file():
@@ -91,7 +95,6 @@ async def run_suite(args, report):
                 process = await asyncio.create_subprocess_exec(str(binary), "-port", str(port), "-new", cwd=directory,
                     env=env, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
                 ready = asyncio.get_running_loop().create_future()
-                output = []
                 async def read_output():
                     async for line in process.stdout:
                         text = re.sub(r"\x1b\[[0-9;]*m", "", line.decode(errors="replace"))
@@ -117,7 +120,7 @@ async def run_suite(args, report):
                             if await asyncio.to_thread(health) == b"healthy\n":
                                 break
                         except Exception as exc:
-                            last = type(exc).__name__
+                            last = type(exc).__name__ + ": " + str(exc)
                         await asyncio.sleep(2)
                     else:
                         raise RuntimeError("public HTTP readiness failed: " + str(last))
@@ -131,8 +134,8 @@ async def run_suite(args, report):
 
                 async with dial("/ws/a%2Fb?query=hello%20world") as ws:
                     meta = json.loads(await ws.recv())
-                    assert meta["path"] == "/ws/a%2Fb?query=hello%20world" and meta["host"] == host
-                    assert meta["origin"] == origin and meta["authenticated"] and ws.subprotocol == "chat.v1"
+                    assert meta["path"] == "/ws/a%2Fb?query=hello%20world" and meta["host"] == host, "path/host"
+                    assert meta["origin"] == origin and meta["authenticated"] and ws.subprotocol == "chat.v1", "origin/auth/protocol"
                     passed("101 handshake, path/query, Host, Origin, Authorization, Cookie and subprotocol")
                     passed("server-initiated message before client data")
                     for label, message in [("empty text", ""), ("UTF-8 text", "你好，WebSocket 👋"),
@@ -141,40 +144,51 @@ async def run_suite(args, report):
                         assert await ws.recv() == message, label
                         passed(label)
                     await ws.send(["fragment-1", "分片二", "-3"])
-                    assert await ws.recv() == "fragment-1分片二-3"
+                    assert await ws.recv() == "fragment-1分片二-3", "text fragmentation"
                     passed("fragmented text message")
                     await ws.send([b"\x00\xff", b"\xfe\x01", b"end"])
-                    assert await ws.recv() == b"\x00\xff\xfe\x01end"
+                    assert await ws.recv() == b"\x00\xff\xfe\x01end", "binary fragmentation"
                     passed("fragmented binary message")
                     await asyncio.wait_for(await ws.ping(b"client-ping"), 10)
                     passed("client ping / origin pong")
                     await ws.send("__server_ping__")
-                    assert await ws.recv() == "server-ping-ok"
+                    assert await ws.recv() == "server-ping-ok", "server ping"
                     passed("origin ping / client pong")
                     for i in range(100):
                         message = f"ordered-message-{i}"
                         await ws.send(message)
-                        assert await ws.recv() == message
+                        assert await ws.recv() == message, "message order"
                     passed("100 ordered round trips")
                     await asyncio.sleep(3)
                     await ws.send("after-idle")
-                    assert await ws.recv() == "after-idle"
+                    assert await ws.recv() == "after-idle", "idle resume"
                     passed("idle then resume")
                     await ws.close(1000, "client finished")
-                    assert ws.close_code == 1000 and ws.close_reason == "client finished"
+                    assert ws.close_code == 1000 and ws.close_reason == "client finished", "client close"
                     passed("normal close code and reason")
                 async with dial(compression="deflate") as ws:
-                    await ws.recv()
-                    assert "permessage-deflate" in ws.response.headers.get("Sec-WebSocket-Extensions", "")
+                    meta = json.loads(await ws.recv())
+                    extension = ws.response.headers.get("Sec-WebSocket-Extensions", "")
+                    negotiated = "permessage-deflate" in extension
+                    report["compression"] = {
+                        "offered_by_client": True, "offered_to_origin": meta["extension_offer_at_origin"],
+                        "response_extensions": extension, "negotiated": negotiated,
+                    }
+                    # RFC6455/7692 allow extension offers to be declined. An edge
+                    # may strip the offer; never claim compression was negotiated
+                    # just because uncompressed data passed. Local Go integration
+                    # separately tests negotiated deflate frames byte-for-byte.
+                    if args.local_only:
+                        assert negotiated, "fixture should negotiate compression directly"
                     message = "compressible-data-" * 65536
                     await ws.send(message)
-                    assert await ws.recv() == message
-                    passed("negotiated permessage-deflate with >1 MiB text")
+                    assert await ws.recv() == message, "compression/fallback data corrupted"
+                    passed("compression offer and >1 MiB text: " + ("negotiated deflate" if negotiated else "uncompressed fallback"))
                 async with dial() as ws:
                     await ws.recv()
                     await ws.send("__server_close__")
                     await ws.wait_closed()
-                    assert ws.close_code == 1001 and ws.close_reason == "origin closing"
+                    assert ws.close_code == 1001 and ws.close_reason == "origin closing", "origin close"
                     passed("origin-initiated close")
                 async def concurrent(index):
                     async with dial(f"/ws/concurrent/{index}") as ws:
@@ -182,7 +196,7 @@ async def run_suite(args, report):
                         for i in range(10):
                             message = f"{index}:{i}"
                             await ws.send(message)
-                            assert await ws.recv() == message
+                            assert await ws.recv() == message, "concurrent stream mixup"
                 await asyncio.gather(*(concurrent(i) for i in range(16)))
                 passed("16 concurrent connections, 160 isolated echoes")
                 for status, path, headers, request_origin in [
@@ -192,10 +206,10 @@ async def run_suite(args, report):
                         async with dial(path, headers=headers, request_origin=request_origin):
                             raise AssertionError(f"expected origin {status}")
                     except InvalidStatus as exc:
-                        assert exc.response.status_code == status
-                        assert exc.response.headers["X-Test-Rejection"] == str(status)
+                        assert exc.response.status_code == status, f"origin {status} became {exc.response.status_code}"
+                        assert exc.response.headers["X-Test-Rejection"] == str(status), "rejection headers"
                         if status == 401:
-                            assert exc.response.headers["WWW-Authenticate"] == 'Bearer realm="trynet-test"'
+                            assert exc.response.headers["WWW-Authenticate"] == 'Bearer realm="trynet-test"', "auth challenge"
                         passed(f"origin {status} rejection and headers preserved")
                 async with dial() as ws:
                     await ws.recv()
@@ -211,7 +225,7 @@ async def run_suite(args, report):
                 async with dial() as ws:
                     await ws.recv()
                     await ws.send("reconnected")
-                    assert await ws.recv() == "reconnected"
+                    assert await ws.recv() == "reconnected", "new connection recovery"
                 for _ in range(50):
                     if not active:
                         break
@@ -230,6 +244,8 @@ async def run_suite(args, report):
                         await process.wait()
                 if reader_task is not None:
                     await reader_task
+                if not report["success"]:
+                    report["tunnel_log_tail"] = "".join(output[-20:]).replace(token, "[redacted]")
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -243,7 +259,8 @@ def main():
         asyncio.run(asyncio.wait_for(run_suite(args, report), 300))
     except Exception as exc:
         report["error"] = type(exc).__name__ + ": " + str(exc)
-        print(report["error"], file=sys.stderr)
+        report["traceback"] = traceback.format_exc()
+        print(report["traceback"], file=sys.stderr)
     finally:
         report["elapsed_seconds"] = round(time.monotonic()-start, 2)
         Path(args.output).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
