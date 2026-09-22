@@ -11,11 +11,15 @@ permissions:
   contents: write
 
 jobs:
-  replace:
+  replace-test-release:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      UPX_VERSION: '5.2.1'
+      UPX_SHA256: '402162aad30af47e60dbd767fb2e64ca394ace9727ba1f40283641f1d1b91657'
+
     steps:
-      - name: Checkout
+      - name: Checkout staged repository
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -24,9 +28,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .trynet-bootstrap/part-* > /tmp/trynet-source.b64
+          cat .trynet-bootstrap/payload-* > /tmp/trynet-source.b64
           base64 -d /tmp/trynet-source.b64 > /tmp/trynet-source.tar.xz
-          echo 'ab8d7199969a07aa0b5f0bd951108d986769dcf1690b244a10bb2bc269a9ffd8  /tmp/trynet-source.tar.xz' | sha256sum -c -
+          echo 'c4a9d03be6bde92c554c70ecd3bdf0a5c0ed17c1e3aa3edb2700f9783d4f0441  /tmp/trynet-source.tar.xz' | sha256sum -c -
           mkdir -p /tmp/trynet-source
           tar -xJf /tmp/trynet-source.tar.xz -C /tmp/trynet-source
 
@@ -34,14 +38,65 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp .github/workflows/trynet-bootstrap.yml /tmp/trynet-bootstrap.yml
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           cp -a /tmp/trynet-source/. .
-          mkdir -p .github/workflows
-          cp /tmp/trynet-bootstrap.yml .github/workflows/trynet-bootstrap.yml
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'chore: replace repository with uploaded TryNet source'
+          git commit -m 'release: replace repository with TryNet v1.0.0'
           git push origin HEAD:main
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Install UPX 5.2.1
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://github.com/upx/upx/releases/download/v${UPX_VERSION}/upx-${UPX_VERSION}-amd64_linux.tar.xz"
+          curl --fail --location --retry 3 --output /tmp/upx.tar.xz "$url"
+          echo "${UPX_SHA256}  /tmp/upx.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/upx.tar.xz -C /tmp
+          echo "/tmp/upx-${UPX_VERSION}-amd64_linux" >> "$GITHUB_PATH"
+
+      - name: Build all release binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf dist
+          go run make.go -all
+          ./dist/trynet-linux-amd64 -h >/dev/null
+          cd dist
+          sha256sum trynet-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Recreate v1.0.0 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+          git push origin :refs/tags/v1.0.0 2>/dev/null || true
+          git tag -d v1.0.0 2>/dev/null || true
+          git tag -a v1.0.0 -m 'TryNet v1.0.0'
+          git push origin v1.0.0
+
+      - name: Publish v1.0.0 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release delete v1.0.0 --cleanup-tag -y 2>/dev/null || true
+          git tag -f v1.0.0
+          git push origin v1.0.0 --force
+          gh release create v1.0.0 \
+            dist/trynet-* dist/SHA256SUMS.txt \
+            --title 'TryNet v1.0.0' \
+            --notes 'First clean TryNet release. Includes Windows, Linux and macOS builds for amd64 and arm64. Windows/Linux binaries are UPX-packed when supported; macOS binaries are intentionally left unpacked.'
