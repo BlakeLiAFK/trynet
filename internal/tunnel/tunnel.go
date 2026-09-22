@@ -175,9 +175,11 @@ func (t *tunnel) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Header.Get(headerUpgrade) == upgradeControlStream:
 		t.serveControlStream(w, r)
+	case strings.EqualFold(r.Header.Get(headerUpgrade), "websocket") && r.Header.Get(headerTCPProxySrc) == "":
+		t.serveWebSocket(w, r)
 	case r.Header.Get(headerUpgrade) != "" || r.Header.Get(headerTCPProxySrc) != "":
-		// websocket / TCP / 配置下发，本版本不支持
-		http.Error(w, "trynet only supports plain HTTP requests", http.StatusNotImplemented)
+		// 原始 TCP / SSH / 配置下发暂不支持；WebSocket 在上面的独立分支处理
+		http.Error(w, "trynet supports HTTP and WebSocket, not raw TCP/SSH or configuration streams", http.StatusNotImplemented)
 	default:
 		t.proxy.ServeHTTP(w, r)
 	}
@@ -205,7 +207,7 @@ func (t *tunnel) serveControlStream(w http.ResponseWriter, r *http.Request) {
 	tunnelID, err := uuid.Parse(t.info.ID)
 	if err != nil {
 		// 理论上不会发生（ID 是我们自己刚从 JSON 解出来的），但万一发生了，
-		// 标记 rejected 让 run() 试着换一个新隧道，属于自愈而不是卡死。
+		// 标记 rejected 让 run() 试着换一个新隧道再试，属于自愈而不是卡死。
 		t.setResult(Result{Err: fmt.Errorf("invalid tunnel id: %w", err), Rejected: true})
 		return
 	}

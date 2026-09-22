@@ -1,0 +1,79 @@
+name: WebSocket acceptance
+on:
+  push:
+    branches: [main]
+    paths: ['internal/tunnel/**', 'scripts/websocket_smoke.py', '.github/workflows/websocket.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: websocket-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  protocol:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - name: Repeat real HTTP2 regression tests with race detector
+        shell: bash
+        run: |
+          set -euo pipefail
+          go vet ./...
+          go test -race -count=20 -run '^TestWebSocket' -timeout=5m -json ./internal/tunnel | tee websocket-tests.json
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: 73cb6ec876e21b12063bff81d0a2ebaa804d4fbd
+          path: baseline
+          persist-credentials: false
+      - name: Prove the old implementation fails this exact upgrade test with 501
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp internal/tunnel/websocket_test.go baseline/internal/tunnel/websocket_test.go
+          cd baseline
+          if go test -count=1 -run '^TestWebSocketEchoOverHTTP2$' -timeout=30s ./internal/tunnel > ../websocket-baseline.txt 2>&1; then
+            echo 'Baseline unexpectedly passed'; exit 1
+          fi
+          cat ../websocket-baseline.txt
+          grep -F 'upgrade status = 501, want 200' ../websocket-baseline.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: websocket-protocol-evidence
+          path: |
+            websocket-tests.json
+            websocket-baseline.txt
+          retention-days: 14
+  live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7.0.0
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install test-only WebSocket implementation
+        run: python -m pip install websockets==15.0.1
+      - name: Build the actual CLI
+        env:
+          CGO_ENABLED: '0'
+        run: go build -trimpath -ldflags='-s -w' -o "$RUNNER_TEMP/trynet" .
+      - name: Test real public WSS through a temporary Cloudflare tunnel
+        run: python scripts/websocket_smoke.py --binary "$RUNNER_TEMP/trynet" --output websocket-live.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: websocket-live-evidence
+          path: websocket-live.json
+          retention-days: 14
