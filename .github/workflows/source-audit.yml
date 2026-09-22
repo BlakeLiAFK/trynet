@@ -1,0 +1,24 @@
+name: Audit staged source
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/source-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Archive staged files for verification
+        run: git archive --format=zip HEAD -o "$RUNNER_TEMP/staged-source.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: staged-source-audit
+          path: ${{ runner.temp }}/staged-source.zip
+          retention-days: 1
+          if-no-files-found: error
