@@ -123,10 +123,6 @@ def main() -> None:
         base = "trynet-v" + args.version + "-" + target
         metadata["archive"] = base + extension
         package(dist / metadata["archive"], final, docs, metadata)
-        if metadata["packed"]:
-            metadata["unpacked_archive"] = base + "-unpacked" + extension
-            fallback = {**metadata, "packed": False, "binary_bytes": raw.stat().st_size, "binary_sha256": sha256(raw), "packing_note": "Unpacked compatibility build"}
-            package(dist / metadata["unpacked_archive"], raw, docs, fallback)
         report["targets"].append(metadata)
         print(json.dumps(metadata), flush=True)
     (dist / "BUILDINFO.json").write_text(json.dumps(report, indent=2) + "\n")
@@ -137,10 +133,10 @@ def main() -> None:
              "Source commit: `" + args.commit + "`", "", "| Target | Unpacked executable | Delivered executable | UPX |", "|---|---:|---:|---|"]
     for target in report["targets"]:
         lines.append("| {goos}/{goarch} | {unpacked_bytes:,} bytes | {binary_bytes:,} bytes | {status} |".format(**target, status="Yes" if target["packed"] else "No"))
-    lines += ["", "Each package includes English/Chinese documentation and license files. `-unpacked` packages are compatibility alternatives, not debug builds.", "",
-              "All six targets pass native unit tests and executable smoke checks before publication. The packaged Linux amd64 UPX and unpacked executables also pass real public WSS acceptance tests through temporary Cloudflare quick tunnels before publication.", "",
+    lines += ["", "Each package includes English/Chinese documentation and license files. Release assets contain only the primary executable for each target; no separate unpacked compatibility archives are published.", "",
+              "All six targets pass native unit tests and executable smoke checks before publication. The packaged Linux amd64 executable also passes real public WSS acceptance tests through a temporary Cloudflare quick tunnel before publication.", "",
               "WebSocket tests cover text/binary, 1 MiB messages, fragmentation, ping/pong, close codes, 16 concurrent clients, origin authentication rejection and socket cleanup. Extension negotiation can fall back to uncompressed frames; the test report records the actual outcome. No raw TCP/UDP/SSH support or automatic session recovery is implied.", "",
-              "Windows executables are not Authenticode-signed; macOS builds are not Developer ID-signed or notarized. UPX is executable compression, not encryption or a security boundary. If security software rejects a packed binary, use the unpacked package; do not disable protection.", "",
+              "Windows executables are not Authenticode-signed; macOS builds are not Developer ID-signed or notarized. UPX is executable compression, not encryption or a security boundary.", "",
               "Verify downloads with SHA256SUMS.txt. Named/custom-domain provisioning remains experimental and unverified against a live Cloudflare account; public quick-tunnel WSS tests do not validate those account API operations."]
     (dist / "release-notes.md").write_text("\n".join(lines) + "\n")
 
